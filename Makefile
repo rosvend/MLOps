@@ -1,4 +1,4 @@
-.PHONY: install test eda
+.PHONY: install test eda score
 
 install:
 	uv sync
@@ -8,3 +8,6 @@ test:
 
 eda:
 	uv run jupyter lab notebooks/eda.ipynb
+
+score:
+	uv run python -m src.pipelines.score

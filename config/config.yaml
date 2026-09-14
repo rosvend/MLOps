@@ -2,3 +2,6 @@ data_source:
   type: csv
   path: data/raw/BD_creditos.csv
   separator: ";"
+
+model:
+  threshold: 4

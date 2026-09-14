@@ -18,8 +18,13 @@ class DataSourceConfig(BaseModel):
         return self.model_dump(exclude={"type"})
 
 
+class ModelConfig(BaseModel):
+    threshold: int
+
+
 class Config(BaseModel):
     data_source: DataSourceConfig
+    model: ModelConfig
 
 
 def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> Config:
