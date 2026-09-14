@@ -216,5 +216,15 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
-data/
-src/models/
+# Raw data is committed until DVC takes over versioning
+data/*
+!data/README.md
+!data/raw/
+data/raw/*
+!data/raw/BD_creditos.csv
+
+# Trained model artifacts, not model code
+src/models/*.pkl
+src/models/*.joblib
+
+CLAUDE.md
