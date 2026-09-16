@@ -58,6 +58,10 @@ class BatchRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     records: list[ApplicationRecord] = Field(min_length=1, max_length=_MAX_BATCH)
+    # Purely additive what-if: never changes `review_flag`, which stays decided by the
+    # frozen threshold recorded with the champion regardless of what a caller supplies
+    # here - the same applicant must get the same answer alone or in any batch.
+    decision_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 class Prediction(BaseModel):
@@ -65,6 +69,9 @@ class Prediction(BaseModel):
     probability_default: float = Field(ge=0.0, le=1.0)
     review_flag: bool
     threshold: float
+    # Set only when the request carried decision_threshold; what the decision would be
+    # at that custom cut-point. Never authoritative - review_flag/threshold above are.
+    review_flag_at_custom_threshold: bool | None = None
 
 
 class BatchResponse(BaseModel):
@@ -83,3 +90,12 @@ class Health(BaseModel):
     git_sha: str | None = None
     feature_store: str
     online_store: None = None
+
+
+class DriftCheckResponse(BaseModel):
+    dataset_drift_detected: bool
+    drift_share: float = Field(ge=0.0, le=1.0)
+    drifted_features: list[str]
+    flagged_share_current: float
+    flagged_share_at_fit: float
+    current_rows: int

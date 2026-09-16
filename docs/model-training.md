@@ -12,6 +12,23 @@ src/models/champion.py        comparison table and selection
 src/pipelines/train.py        make train
 ```
 
+## What "out-of-time" means
+
+Every result in this document, and most of the plots below, are qualified "out of time" -
+worth defining plainly once, since it is the load-bearing idea in this whole stage.
+
+It is a **split by date, not a random shuffle.** The model trains only on the oldest 75 % of
+loan vintages (7,713 loans, originated before June 2025) and is evaluated only on the newest
+25 % (3,050 loans, June 2025 onward) - months it never saw during tuning. A standard shuffled
+k-fold split would let a model see loans from the same months it is being scored on, which a
+real production model never gets to do: it only ever scores the future.
+
+The difference is not theoretical here. The default rate itself moves from 5.32 % (train) to
+3.31 % (test), and most features show real distributional drift between the two windows (see
+`feature_drift_magnitude.png` below). Out-of-time evaluation is what caught it: XGBoost had the
+best cross-validation score of the three tuned candidates and the worst out-of-time score - see
+"The result that justifies the protocol" below.
+
 ## Protocol
 
 **Tuning** uses stratified 5-fold cross-validation **inside the training window only**, scored on
@@ -49,6 +66,26 @@ each.
 Brier is withheld for the heuristic: it emits integer points, not probabilities, and scoring
 those against Brier would compare points to probabilities and report a meaningless number.
 
+![Out-of-time PR-AUC and Gini by model](plots/model_comparison_performance.png)
+
+Every model at its own threshold, calibrated to the same 15.7 % flagged share on the held-out
+test set — the confusion matrices this table's precision/recall came from:
+
+![Confusion matrix per model, out of time](plots/confusion_matrices.png)
+
+Threshold-free view of the same ranking. ROC (all thresholds) and precision-recall (the metric
+that actually chose the champion) side by side — the gap between them is the point: at a 4.75 %
+base rate, ROC compresses how different these models really are, and PR-AUC does not:
+
+![ROC curve, out of time](plots/roc_curves.png)
+![Precision-recall curve, out of time](plots/pr_curves.png)
+
+Every candidate against every reported metric at once, normalised so outward always means
+better — logistic (orange) is furthest out on the metric that mattered (PR-AUC) and roughly tied
+elsewhere; the boosters trade F1/precision/recall for it:
+
+![Parallel coordinates across every metric](plots/parallel_coordinates.png)
+
 ## The result that justifies the protocol
 
 **XGBoost has the best cross-validation score and the worst out-of-time PR-AUC of the three
@@ -60,6 +97,16 @@ and it would have been the wrong model. The boosters have the capacity to fit vi
 structure in the tuning folds, and that structure does not survive into the next six months.
 Consistency would not have caught it either: XGBoost and LightGBM have *lower* fold variance than
 logistic (0.0137 and 0.0113 against 0.0250). Only the held-out window separates them.
+
+![Cross-validation score vs out-of-time score, per tuned model](plots/model_comparison_cv_vs_oot.png)
+
+The same story from the data side rather than the model side — what actually shifted between
+the two windows, and what it cost the champion:
+
+![Top drifted features, train vs held-out test](plots/feature_drift_magnitude.png)
+![Why out-of-time: the champion's own quality, train vs test](plots/why_out_of_time_matters.png)
+
+Regenerate every plot on this page from the current `reports/champion.json` and MLflow store with `uv run python scripts/plot_model_comparison.py && uv run python scripts/plot_model_analysis.py`.
 
 ## Champion: logistic regression
 

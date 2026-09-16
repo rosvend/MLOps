@@ -19,6 +19,8 @@ from src.features.contract import features
 from src.features.derive import add_derived_features
 from src.features.spec import FeatureSpec, default_spec
 from src.models.training_spec import ServingSpec, default_serving_spec
+from src.monitoring.predictions_log import PredictionsLog
+from src.monitoring.spec import default_monitoring_spec
 
 _log = logging.getLogger(__name__)
 RAIZ = Path(__file__).resolve().parents[2]
@@ -55,6 +57,12 @@ def load_champion(model_path: str, meta_path: str) -> Champion:
     )
 
 
+@lru_cache(maxsize=1)
+def load_predictions_log() -> PredictionsLog:
+    """One connection for the life of the process, same lifecycle as the champion."""
+    return PredictionsLog(RAIZ / default_monitoring_spec().predictions_db_path)
+
+
 def _frame(records: list[dict], champion: Champion) -> pd.DataFrame:
     """Build the frame clean() expects from what the caller actually sent."""
     spec = champion.spec
@@ -69,17 +77,29 @@ def _frame(records: list[dict], champion: Champion) -> pd.DataFrame:
     return pd.DataFrame(filas)
 
 
-def score(records: list[dict], champion: Champion) -> list[dict]:
-    """Probability of default and the decision the frozen threshold makes from it."""
+def score(
+    records: list[dict],
+    champion: Champion,
+    decision_threshold: float | None = None,
+    predictions_log: PredictionsLog | None = None,
+) -> list[dict]:
+    """Probability of default and the decision the frozen threshold makes from it.
+
+    decision_threshold is a purely additive what-if: it never changes review_flag, which
+    stays decided by the frozen threshold regardless of what is supplied here.
+    predictions_log, when given, records each prediction as the "current data" future
+    drift checks compare against the training reference.
+    """
     crudo = _frame(records, champion)
     preparado = features(add_derived_features(clean(crudo, champion.spec), champion.spec), champion.spec)
     faltan = [c for c in champion.meta["features"] if c not in preparado.columns]
     if faltan:
         raise ValueError(f"la vista de features no trae {faltan}")
 
-    proba = champion.pipeline.predict_proba(preparado[champion.meta["features"]])[:, 1]
+    columnas_modelo = preparado[champion.meta["features"]]
+    proba = champion.pipeline.predict_proba(columnas_modelo)[:, 1]
     umbral = champion.threshold
-    return [
+    predicciones = [
         {
             "application_id": registro["application_id"],
             "probability_default": float(p),
@@ -87,9 +107,27 @@ def score(records: list[dict], champion: Champion) -> list[dict]:
             # batch of a thousand. A per-batch quantile would not.
             "review_flag": bool(p >= umbral),
             "threshold": umbral,
+            "review_flag_at_custom_threshold": (
+                bool(p >= decision_threshold) if decision_threshold is not None else None
+            ),
         }
         for registro, p in zip(records, proba)
     ]
+
+    if predictions_log is not None:
+        registros_log = []
+        for (_, fila), pred in zip(columnas_modelo.iterrows(), predicciones):
+            registros_log.append(
+                {
+                    **fila.to_dict(),
+                    "application_id": pred["application_id"],
+                    "probability_default": pred["probability_default"],
+                    "review_flag": pred["review_flag"],
+                }
+            )
+        predictions_log.append(registros_log)
+
+    return predicciones
 
 
 def feature_store_status() -> str:

@@ -13,6 +13,10 @@ services:
     environment:
       SERVING_MODEL_PATH: /app/models/champion.joblib
       SERVING_META_PATH: /app/models/champion.meta.json
+    volumes:
+      # The one write path the container needs: the SQLite request log and live drift
+      # dashboards. Everything else stays read-only, unmounted, exactly as stage 8 left it.
+      - ./data/monitoring:/app/data/monitoring
     read_only: true
     tmpfs:
       - /tmp
