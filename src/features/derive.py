@@ -1,7 +1,8 @@
 import pandas as pd
 
-EDAD_ADULTA = 18
-RANGO_EDAD_BINS = [17, 25, 35, 45, 55, 65, 100]
+from src.features.cleaning import EDAD_ADULTA, EDAD_MAXIMA
+
+RANGO_EDAD_BINS = [EDAD_ADULTA - 1, 25, 35, 45, 55, 65, EDAD_MAXIMA]
 RANGO_EDAD_LABELS = ["18-25", "26-35", "36-45", "46-55", "56-65", "66+"]
 
 

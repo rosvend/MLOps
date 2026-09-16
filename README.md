@@ -10,7 +10,7 @@ drift) · FastAPI · Docker
 
 ## Layout
 
-```
+```text
 config/config.yaml      where the data lives and how it is read
 data/raw/               BD_creditos.csv, 10 763 loans (DVC takes over later)
 notebooks/eda.ipynb     the exploratory analysis and its findings

@@ -2,27 +2,32 @@ import pandas as pd
 import pandera.pandas as pa
 
 from src.features.cleaning import (
+    EDAD_ADULTA,
+    EDAD_MAXIMA,
     PUNTAJE_BUREAU_MAX,
     PUNTAJE_BUREAU_MIN,
     SALARIO_MAXIMO,
     TENDENCIAS,
+    TIPOS_CREDITO,
+    TIPOS_LABORAL,
 )
-from src.features.derive import EDAD_ADULTA
 
 CAPITAL_MINIMO = 360_000
 PLAZO_MAXIMO_MESES = 90
-EDAD_MAXIMA_VALIDA = 100
 
 
-class CreditoSchema(pa.DataFrameModel):
-    """Contract every downstream stage can rely on; a violation fails here, not silently later."""
+class CreditoFeaturesSchema(pa.DataFrameModel):
+    """Contract every downstream stage can rely on; a violation fails here, not silently later.
 
-    tipo_credito: pd.CategoricalDtype = pa.Field(isin=["4", "9", "10", "Otro"])
+    Excludes the target on purpose, so scoring never requires knowing the outcome.
+    """
+
+    tipo_credito: pd.CategoricalDtype = pa.Field(isin=TIPOS_CREDITO)
     fecha_prestamo: pd.Timestamp = pa.Field()
     capital_prestado: int = pa.Field(ge=CAPITAL_MINIMO)
     plazo_meses: int = pa.Field(ge=1, le=PLAZO_MAXIMO_MESES)
-    edad_cliente: pd.Int64Dtype = pa.Field(ge=EDAD_ADULTA, le=EDAD_MAXIMA_VALIDA, nullable=True)
-    tipo_laboral: pd.CategoricalDtype = pa.Field(isin=["Empleado", "Independiente"])
+    edad_cliente: pd.Int64Dtype = pa.Field(ge=EDAD_ADULTA, le=EDAD_MAXIMA, nullable=True)
+    tipo_laboral: pd.CategoricalDtype = pa.Field(isin=TIPOS_LABORAL)
     salario_cliente: pd.Int64Dtype = pa.Field(gt=0, le=SALARIO_MAXIMO, nullable=True)
     total_otros_prestamos: int = pa.Field(ge=0)
     cuota_pactada: int = pa.Field(gt=0)
@@ -40,7 +45,6 @@ class CreditoSchema(pa.DataFrameModel):
     creditos_sectorReal: int = pa.Field(ge=0)
     promedio_ingresos_datacredito: pd.Int64Dtype = pa.Field(gt=0, nullable=True)
     tendencia_ingresos: pd.CategoricalDtype = pa.Field(isin=TENDENCIAS, nullable=True)
-    Pago_atiempo: bool = pa.Field()
 
     cuota_supera_salario: bool = pa.Field()
     dti: pd.Float64Dtype = pa.Field(ge=0, nullable=True)
@@ -63,3 +67,9 @@ class CreditoSchema(pa.DataFrameModel):
     @pa.dataframe_check
     def fecha_prestamo_no_es_futura(cls, df: pd.DataFrame) -> pd.Series:
         return df["fecha_prestamo"] <= pd.Timestamp.today()
+
+
+class CreditoLabelledSchema(CreditoFeaturesSchema):
+    """The features plus the outcome; required to train or evaluate, never to score."""
+
+    Pago_atiempo: bool = pa.Field()

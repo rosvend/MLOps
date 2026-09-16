@@ -80,3 +80,43 @@ def test_clean_composes_every_step(raw):
     assert "saldo_mora_codeudor" not in cleaned.columns
     assert "cuota_supera_salario" in cleaned.columns
     assert cleaned["puntaje"].dtype == "Float64"
+
+
+def _con_columna(raw, nombre, valores):
+    df = raw.head(len(valores)).copy()
+    df[nombre] = valores
+    return df
+
+
+@pytest.mark.parametrize("crudo", [["False", "True", "0"], [0, 1, 0], ["0", "1", "0"]])
+def test_the_target_survives_any_boolean_representation(raw, crudo):
+    typed = coerce_types(nullify_sentinels(_con_columna(raw, "Pago_atiempo", crudo)))
+
+    assert typed["Pago_atiempo"].tolist() == [False, True, False]
+
+
+@pytest.mark.parametrize("basura", [[None, 1, 0], ["si", "no", "1"], [2, 1, 0]])
+def test_an_unreadable_target_raises_instead_of_defaulting_to_paid(raw, basura):
+    with pytest.raises(ValueError, match="Pago_atiempo"):
+        coerce_types(nullify_sentinels(_con_columna(raw, "Pago_atiempo", basura)))
+
+
+@pytest.mark.parametrize("crudo", [["95,2", "90,5", "88,1"], [95.2, 90.5, 88.1]])
+def test_the_score_parses_whether_the_source_sends_text_or_numbers(raw, crudo):
+    typed = coerce_types(nullify_sentinels(_con_columna(raw, "puntaje", crudo)))
+
+    assert typed["puntaje"].tolist() == pytest.approx([95.2, 90.5, 88.1])
+
+
+def test_categories_do_not_depend_on_which_rows_are_in_the_batch(raw):
+    completo = clean(raw)
+    parcial = clean(raw.head(2))
+
+    for columna in ("tipo_credito", "tipo_laboral"):
+        assert list(parcial[columna].cat.categories) == list(completo[columna].cat.categories)
+
+
+def test_ages_below_adulthood_are_nulled_like_any_other_impossible_value(raw):
+    nullified = nullify_sentinels(_con_columna(raw, "edad_cliente", [17, 30, 122]))
+
+    assert nullified["edad_cliente"].isna().tolist() == [True, False, True]
