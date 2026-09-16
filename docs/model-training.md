@@ -49,6 +49,8 @@ each.
 Brier is withheld for the heuristic: it emits integer points, not probabilities, and scoring
 those against Brier would compare points to probabilities and report a meaningless number.
 
+![Out-of-time PR-AUC and Gini by model](plots/model_comparison_performance.png)
+
 ## The result that justifies the protocol
 
 **XGBoost has the best cross-validation score and the worst out-of-time PR-AUC of the three
@@ -60,6 +62,10 @@ and it would have been the wrong model. The boosters have the capacity to fit vi
 structure in the tuning folds, and that structure does not survive into the next six months.
 Consistency would not have caught it either: XGBoost and LightGBM have *lower* fold variance than
 logistic (0.0137 and 0.0113 against 0.0250). Only the held-out window separates them.
+
+![Cross-validation score vs out-of-time score, per tuned model](plots/model_comparison_cv_vs_oot.png)
+
+Regenerate both from the current `reports/champion.json` with `uv run python scripts/plot_model_comparison.py`.
 
 ## Champion: logistic regression
 
