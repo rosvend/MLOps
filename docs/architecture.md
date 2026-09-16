@@ -55,10 +55,10 @@ Green outline is shipped, orange is next in dependency order, dashed grey is lat
 | 2 | Access | `DataSource` port + adapter | `src/data/` | shipped |
 | 3 | Prepare | pandas | `src/features/`, `src/pipelines/prepare.py` | shipped |
 | 4 | Validate | pandera | `src/data/schema.py` | shipped |
-| 5 | Feature engineering | pandas | `src/features/` | next |
-| 6 | Feature store | Feast | — | next |
-| 7 | Train | scikit-learn | `src/models/` | next |
-| 8 | Track + register | MLflow | — | next |
+| 5 | Feature engineering | pandas | `src/features/` | shipped |
+| 6 | Feature store | Feast | `feature_repo/` | shipped (offline only) |
+| 7 | Train | scikit-learn, XGBoost, LightGBM, Optuna | `src/models/`, `src/pipelines/train.py` | shipped |
+| 8 | Track + register | MLflow | `mlflow.db` | tracking shipped, registry next |
 | 9 | Serve | FastAPI + Docker | `src/deployment/`, `docker/` | later |
 | 10 | Monitor | Evidently | `src/monitoring/` | later |
 | — | Versioning | DVC | — | next |
@@ -201,26 +201,34 @@ adopt it there or drop the dependency; leaving it declared and unused is the wor
 | Evidently, Feast, FastAPI, Docker, pydantic | — | Each owns a job nothing else does |
 | — | Hydra (undecided) | Adopt at stage 7 or drop; currently declared and unused |
 
-## Open questions for the business
+## Answers from the business
 
-These block feature engineering, so they are answered before stage 5:
+Recorded 2026-09-16. These unblocked stage 5.
 
-- Does the whole DataCrédito block — `puntaje_datacredito`, `huella_consulta`,
-  `promedio_ingresos_datacredito`, `tendencia_ingresos` and `saldo_mora` — come from an
-  extract-time snapshot or an origination-time pull? Only `saldo_mora` is currently excluded,
-  but all five arrive together, and those four drive about 70 % of the heuristic's Gini. If the
-  pull is post-origination, `huella_consulta` counts inquiries made *after* the loan and the
-  reported Gini is not achievable at decision time. Cheap interim check: correlate
-  `huella_consulta` against `fecha_prestamo` recency.
-- Should a derived risk flag distinguish "no" from "unknown"? `cuota_supera_salario` and
-  `tiene_mora_bureau` both `.fillna(False)`, so an applicant whose salary was nullified as a
-  sentinel is recorded as "instalment does not exceed salary". That contradicts the stance
-  taken on the target, where an unreadable value raises. Making them nullable changes the
-  schema and the feature semantics, so it belongs with the first trained model.
-- Is `saldo_mora` observed **at origination** or afterwards? If afterwards,
-  `tiene_mora_bureau` is leakage; if before, it is a strong unused signal — 36.4 % default
-  against a 4.6 % base, though on only 55 loans.
-- Are the bureau balances in pesos or thousands? A median `saldo_total` of 16 178 COP is
-  implausible.
-- Is there a credit or client identifier? The dataset has none. Feast needs an entity join
-  key, and without a client key repeat borrowers cannot be detected either.
+- **The DataCrédito block is an origination-time pull**, not an extract-time snapshot. So
+  `puntaje_datacredito`, `huella_consulta`, `promedio_ingresos_datacredito`,
+  `tendencia_ingresos` and `saldo_mora` are all decision-time features and the heuristic's
+  Gini 0.352 stands. `saldo_mora` and `tiene_mora_bureau` have come off the withheld list.
+  The data agreed before the business did: inquiries show no accumulation with loan age
+  (corr −0.015, flat across 15 vintages), which an extract-time snapshot would not produce.
+- **Bureau balances are in thousands of COP.** `clean()` scales them to pesos, which moves the
+  median `saldo_total` from an implausible 16 178 COP to 16 178 000 — 5.35× median salary, the
+  right order of magnitude for total bureau debt. `tiene_mora_bureau` thresholds at zero and is
+  unit-invariant, so no score moved.
+- **A derived flag must distinguish "no" from "unknown".** `cuota_supera_salario` and
+  `tiene_mora_bureau` are nullable now: 46 applicants whose salary could not be verified were
+  being recorded as "instalment does not exceed salary", and 156 with no bureau balance as
+  "no arrears". `falta_*` indicators are emitted for the eight source columns whose absence
+  carries signal — every one lifts the default rate when missing, from 1.18× to 1.54× over the
+  4.75 % base.
+- **A client identifier exists and will be added to the extract.** It is not in
+  `data/raw/BD_creditos.csv` yet: none of the 23 columns is unique per row. Feast needs it as
+  the entity join key, and it also unlocks repeat-borrower history, so stage 6 waits on the
+  re-export.
+
+## Still open
+
+- Is `saldo_mora` observed at the same moment as the rest of the bureau block? The business
+  confirmed the block as a whole, but arrears drift weakly with loan age (corr +0.051, on only
+  55 loans), which is the one signal inconsistent with an origination-time pull. Worth a second
+  look once there is more data.

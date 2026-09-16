@@ -1,8 +1,8 @@
 import pytest
 from pydantic import ValidationError
 
-from src.features.cleaning import TENDENCIAS
-from src.features.derive import RANGO_EDAD_LABELS
+from src.features.spec import default_spec
+from src.features.spec import default_spec
 from src.models.scorecard import Scorecard, default_scorecard
 
 
@@ -31,7 +31,7 @@ def test_a_renamed_age_band_is_rejected(spec):
 
 
 def test_an_age_band_without_a_weight_is_rejected(spec):
-    spec["points"]["rango_edad"].pop(RANGO_EDAD_LABELS[-1])
+    spec["points"]["rango_edad"].pop(default_spec().age_bands.labels[-1])
 
     with pytest.raises(ValidationError, match="rango_edad"):
         Scorecard(**spec)
@@ -59,8 +59,8 @@ def test_a_typo_in_a_key_fails_loudly_instead_of_keeping_a_default(spec):
 
 
 def test_the_shipped_vocabularies_match_the_pipeline(spec):
-    assert set(spec["points"]["rango_edad"]) == set(RANGO_EDAD_LABELS)
-    assert set(spec["points"]["tendencia"]) == set(TENDENCIAS)
+    assert set(spec["points"]["rango_edad"]) == set(default_spec().age_bands.labels)
+    assert set(spec["points"]["tendencia"]) == set(default_spec().vocabularies.tendencias)
 
 
 @pytest.mark.parametrize(

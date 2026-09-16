@@ -1,22 +1,22 @@
 import pytest
 
-from src.features.contract import TARGET
+from src.features.spec import default_spec
 from src.pipelines.prepare import prepare_features, prepare_labelled
 from tests.pipelines.test_prepare import InMemorySource
 
 
 def test_an_application_with_no_outcome_can_still_be_prepared(raw):
-    sin_label = raw.drop(columns=[TARGET])
+    sin_label = raw.drop(columns=[default_spec().target])
 
     prepared = prepare_features(InMemorySource(sin_label))
 
     assert len(prepared) == len(raw)
-    assert TARGET not in prepared.columns
+    assert default_spec().target not in prepared.columns
 
 
 def test_preparing_for_training_still_requires_the_outcome(raw):
     with pytest.raises(Exception):
-        prepare_labelled(InMemorySource(raw.drop(columns=[TARGET])))
+        prepare_labelled(InMemorySource(raw.drop(columns=[default_spec().target])))
 
 
 def test_both_paths_agree_on_every_shared_column(sample_source):

@@ -14,7 +14,7 @@ def test_builds_the_csv_adapter(fixture_csv):
 def test_built_source_reads_the_configured_file(fixture_csv):
     config = DataSourceConfig(type="csv", path=str(fixture_csv), separator=";")
 
-    assert build_source(config).read().shape == (14, 23)
+    assert build_source(config).read().shape == (14, 24)  # 23 source columns + cliente_id
 
 
 def test_unknown_type_fails_loudly():

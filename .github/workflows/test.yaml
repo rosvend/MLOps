@@ -26,5 +26,8 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
+      - name: Build the feature store
+        run: make feast-apply
+
       - name: Run tests
         run: uv run pytest

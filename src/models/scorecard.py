@@ -11,8 +11,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from src.features.cleaning import TENDENCIAS
-from src.features.derive import RANGO_EDAD_LABELS
+from src.features.spec import default_spec
 
 SCORECARD_PATH = Path(__file__).resolve().parents[2] / "config" / "model" / "heuristic.yaml"
 
@@ -62,17 +61,18 @@ class Scorecard(BaseModel):
 
     @model_validator(mode="after")
     def _vocabularies_match(self):
-        # Rename a band label in derive.py and every applicant in it would otherwise
-        # score 0 silently: no exception, no schema violation, no failing test.
-        if set(self.points.rango_edad) != set(RANGO_EDAD_LABELS):
+        # Rename a band label in the feature spec and every applicant in it would
+        # otherwise score 0 silently: no exception, no schema violation, no failing test.
+        spec = default_spec()
+        if set(self.points.rango_edad) != set(spec.age_bands.labels):
             raise ValueError(
                 f"points.rango_edad {sorted(self.points.rango_edad)} no coincide con "
-                f"RANGO_EDAD_LABELS {sorted(RANGO_EDAD_LABELS)}"
+                f"age_bands.labels {sorted(spec.age_bands.labels)}"
             )
-        if set(self.points.tendencia) != set(TENDENCIAS):
+        if set(self.points.tendencia) != set(spec.vocabularies.tendencias):
             raise ValueError(
                 f"points.tendencia {sorted(self.points.tendencia)} no coincide con "
-                f"TENDENCIAS {sorted(TENDENCIAS)}"
+                f"vocabularies.tendencias {sorted(spec.vocabularies.tendencias)}"
             )
         if set(self.points.puntaje_bureau) != set(PUNTAJE_BANDAS):
             raise ValueError(f"points.puntaje_bureau debe traer las bandas {list(PUNTAJE_BANDAS)}")

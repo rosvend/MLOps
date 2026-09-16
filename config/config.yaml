@@ -1,4 +1,6 @@
 defaults:
   - data_source: csv
+  - features: default
   - model: heuristic
+  - training: default
   - _self_

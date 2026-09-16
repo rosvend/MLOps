@@ -11,7 +11,13 @@ from typing import Any
 
 import pandas as pd
 
-from src.models.scorecard import HUELLA_BANDAS, PUNTAJE_BANDAS, Scorecard, default_scorecard
+from src.features.spec import default_spec
+from src.models.scorecard import (
+    HUELLA_BANDAS,
+    PUNTAJE_BANDAS,
+    Scorecard,
+    default_scorecard,
+)
 
 Record = Mapping[str, Any] | pd.Series
 
@@ -32,7 +38,7 @@ REQUIRED_COLUMNS = frozenset(
     }
 )
 
-TIPO_LABORAL_INDEPENDIENTE = "Independiente"
+
 
 
 def _falta(valor: Any) -> bool:
@@ -87,7 +93,8 @@ def young_independent(record: Record, scorecard: Scorecard | None = None) -> int
     """Self-employment only carries risk under 36; averaged over all ages it vanishes."""
     s = scorecard or default_scorecard()
     edad = record.get("edad_cliente")
-    if _falta(edad) or record.get("tipo_laboral") != TIPO_LABORAL_INDEPENDIENTE:
+    independiente = default_spec().vocabularies.tipo_laboral_independiente
+    if _falta(edad) or record.get("tipo_laboral") != independiente:
         return 0
     return s.points.independiente_joven if edad < s.cut_points.edad_joven else 0
 

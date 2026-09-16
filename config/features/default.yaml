@@ -1,0 +1,157 @@
+# How the feature pipeline behaves. Nothing here is duplicated in Python: src/features/
+# reads this file, so a run records the exact spec that produced it and an experiment can
+# vary it without a code change.
+
+# Column roles. Anything not claimed by a role below is a model feature.
+entity_key: cliente_id          # Feast join key; a surrogate until the real client ID arrives
+event_timestamp: fecha_prestamo # Feast point-in-time key - never a predictor, it is the vintage
+target: Pago_atiempo
+
+withheld:
+  - puntaje         # leakage: 87 % share the maximum value and none of them defaulted
+  - mes_prestamo    # censoring control derived from the event timestamp, not a predictor
+
+# Values the source system writes to mean "unknown" but that read as valid numbers.
+bounds:
+  edad: [18, 100]
+  puntaje_bureau: [150, 950]
+  salario_maximo: 1000000000
+  capital_minimo: 360000
+  plazo_maximo_meses: 90
+
+vocabularies:
+  tendencias: [Decreciente, Estable, Creciente]
+  tipos_credito_frecuentes: ["4", "9", "10"]
+  tipo_credito_residual: Otro
+  tipos_laboral: [Empleado, Independiente]
+  tipo_laboral_independiente: Independiente
+
+age_bands:
+  bins: [17, 25, 35, 45, 55, 65, 100]
+  labels: ["18-25", "26-35", "36-45", "46-55", "56-65", "66+"]
+
+# The bureau reports balances in thousands of COP; everything else here is pesos.
+units:
+  factor: 1000
+  thousands: [saldo_mora, saldo_total, saldo_principal]
+
+columns:
+  # Which columns are categorical is a fact about the data, not about the dtype a given
+  # reader happens to produce: Feast returns strings, the in-memory path returns categories.
+  categoricas: [tipo_credito, tipo_laboral, tendencia_ingresos, rango_edad]
+  sin_varianza: [saldo_mora_codeudor]
+  enteros:
+    - edad_cliente
+    - salario_cliente
+    - puntaje_datacredito
+    - promedio_ingresos_datacredito
+    - saldo_mora
+    - saldo_total
+    - saldo_principal
+  # Source columns whose absence is itself predictive: each lifts the default rate when
+  # missing, from 1.18x (tendencia_ingresos) to 1.54x (edad_cliente) over the 4.75 % base.
+  vigiladas:
+    - edad_cliente
+    - salario_cliente
+    - puntaje_datacredito
+    - promedio_ingresos_datacredito
+    - tendencia_ingresos
+    - saldo_total
+    - saldo_principal
+    - saldo_mora
+
+# Fitted transforms. Measurements behind these lists are in docs/feature-engineering.md.
+engineering:
+  winsor_quantile: 0.99
+  # Long right tails: clipped at the training p99 so one outlier cannot dominate a fit.
+  heavy_tailed:
+    - capital_prestado
+    - cuota_pactada
+    - total_otros_prestamos
+    - salario_cliente
+    - promedio_ingresos_datacredito
+    - saldo_total
+    - saldo_principal
+    - saldo_mora
+    - dti
+    - pti
+    - monto_sobre_ingreso
+    - ratio_ingreso_declarado_bureau
+    - creditos_por_anio_adulto
+    - cant_creditosvigentes
+    - huella_consulta
+    - creditos_sectorFinanciero
+    - creditos_sectorCooperativo
+    - creditos_sectorReal
+  # Money and ratios span orders of magnitude; log1p after clipping makes them comparable.
+  log_scale:
+    - capital_prestado
+    - cuota_pactada
+    - total_otros_prestamos
+    - salario_cliente
+    - promedio_ingresos_datacredito
+    - saldo_total
+    - saldo_principal
+    - saldo_mora
+    - dti
+    - pti
+    - monto_sobre_ingreso
+    - ratio_ingreso_declarado_bureau
+    - creditos_por_anio_adulto
+
+# Where the materialised feature table lands, ready for Feast to register.
+output_path: data/processed/features.parquet
+
+# Feast requires timezone-aware event timestamps. The source carries no zone, so it is
+# read as UTC; point-in-time joins depend on ordering, which localising cannot change.
+event_timestamp_timezone: UTC
+
+# The Feast entity every view joins on. One ID per row, so it keys a loan, not a borrower.
+entity_name: cliente
+
+# How many loans `make feast-verify` replays through the point-in-time check.
+verify_sample: 200
+
+# Feast feature views. Grouped so a consumer can pull only what it needs; the spec
+# rejects a column claimed twice or reserved, and tests/pipelines/test_features.py checks
+# the views against the built table so a forgotten column cannot slip through either.
+feature_views:
+  credito_solicitud:      # what the applicant declares on the form
+    - tipo_credito
+    - capital_prestado
+    - plazo_meses
+    - edad_cliente
+    - tipo_laboral
+    - salario_cliente
+    - total_otros_prestamos
+    - cuota_pactada
+  credito_bureau:         # the DataCredito block, an origination-time pull
+    - puntaje_datacredito
+    - cant_creditosvigentes
+    - huella_consulta
+    - saldo_mora
+    - saldo_total
+    - saldo_principal
+    - creditos_sectorFinanciero
+    - creditos_sectorCooperativo
+    - creditos_sectorReal
+    - promedio_ingresos_datacredito
+    - tendencia_ingresos
+  credito_derivadas:      # ratios, bands and contrast flags computed per row
+    - cuota_supera_salario
+    - dti
+    - pti
+    - monto_sobre_ingreso
+    - ratio_ingreso_declarado_bureau
+    - creditos_por_anio_adulto
+    - tiene_mora_bureau
+    - rango_edad
+  credito_faltantes:      # absence is information
+    - falta_edad_cliente
+    - falta_salario_cliente
+    - falta_puntaje_datacredito
+    - falta_promedio_ingresos_datacredito
+    - falta_tendencia_ingresos
+    - falta_saldo_total
+    - falta_saldo_principal
+    - falta_saldo_mora

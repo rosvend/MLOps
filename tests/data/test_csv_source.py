@@ -4,7 +4,7 @@ from src.data.csv_source import CsvDataSource
 
 
 def test_reads_every_row_and_column(raw):
-    assert raw.shape == (14, 23)
+    assert raw.shape == (14, 24)  # 23 source columns + cliente_id
 
 
 def test_honours_the_configured_separator(tmp_path):

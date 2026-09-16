@@ -14,7 +14,8 @@ from omegaconf import DictConfig, OmegaConf
 from src.config import Config, from_dict, load_config
 from src.data.factory import build_source
 from src.data.source import DataSource
-from src.features.contract import TARGET, features
+from src.features.contract import features
+from src.features.spec import default_spec
 from src.models.evaluate import evaluate
 from src.models.heuristic import score_frame
 from src.models.scorecard import Scorecard
@@ -31,7 +32,7 @@ def score_portfolio(
     scores = score_frame(features(prepared), scorecard)
     metrics = evaluate(
         scores,
-        ~prepared[TARGET],
+        ~prepared[default_spec().target],
         scorecard.threshold,
         scorecard.deciles,
         scorecard.decile_minimo,

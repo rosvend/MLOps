@@ -1,0 +1,11 @@
+# Offline only. There is deliberately no online store at this stage: nothing serves
+# real-time predictions yet, and `feast materialize` - which loads the online store -
+# is therefore never run. data/processed/features.parquet IS the offline store; this
+# file only registers metadata that points at it.
+project: credito
+provider: local
+registry: data/registry.db
+offline_store:
+  type: file
+online_store: null
+entity_key_serialization_version: 3
