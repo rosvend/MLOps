@@ -262,7 +262,10 @@ def test_it_survives_cross_validation(crudo):
 # empirically - every check here genuinely executes against these estimators.
 
 CHECKS_CLASIFICADOR = [
+    "check_classifier_not_supporting_multiclass",
     "check_classifiers_one_label_sample_weights",
+    "check_classifiers_regression_target",
+    "check_complex_data",
     "check_dataframe_column_names_consistency",
     "check_decision_proba_consistency",
     "check_do_not_raise_errors_in_init_or_set_params",
@@ -272,6 +275,7 @@ CHECKS_CLASIFICADOR = [
     "check_estimator_tags_renamed",
     "check_estimators_fit_returns_self",
     "check_estimators_overwrite_params",
+    "check_estimators_partial_fit_n_features",
     "check_estimators_unfitted",
     "check_fit2d_1feature",
     "check_fit2d_1sample",
@@ -285,6 +289,7 @@ CHECKS_CLASIFICADOR = [
     "check_readonly_memmap_input",
     "check_requires_y_none",
     "check_set_params",
+    "check_supervised_y_no_nan",
     "check_valid_tag_types",
 ]
 
@@ -326,7 +331,7 @@ def test_sklearn_checks_on_the_preparer(check):
 
 def test_the_check_suite_has_not_silently_collapsed():
     """check_estimator skips everything under a DataFrame-only tag; guard the real count."""
-    assert len(CHECKS_CLASIFICADOR) >= 24
+    assert len(CHECKS_CLASIFICADOR) >= 29
     assert len(CHECKS_TRANSFORMADOR) >= 16
 
 

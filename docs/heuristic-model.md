@@ -234,11 +234,14 @@ out-of-time split, or a fresh vintage, can.
 
 It reports success for both classes, and that result is empty: the DataFrame-only input tag makes
 it skip its entire suite, so exactly one check runs. Rather than bank a hollow pass, the
-applicable checks are enumerated and run directly — 24 against the scorecard and 16 against the
+applicable checks are enumerated and run directly — 29 against the model and 16 against the
 preparer, including `check_dataframe_column_names_consistency`,
-`check_n_features_in_after_fitting`, `check_estimators_unfitted` and
-`check_no_attributes_set_in_init`. A test guards the count so the suite cannot silently collapse
-back to a skip.
+`check_n_features_in_after_fitting`, `check_estimators_unfitted`,
+`check_classifier_not_supporting_multiclass` and `check_no_attributes_set_in_init`. A test
+guards the count so the suite cannot silently collapse back to a skip.
+
+`classes_` comes from `y` via `unique_labels`, and a non-binary target is refused: a loan
+either defaulted or it did not.
 
 DataFrame-only is a safety property, not a limitation: the rules pay points for a *missing*
 value, so accepting an unnamed array would make every rule take its "absent" branch and score a

@@ -17,13 +17,13 @@ from sklearn.base import BaseEstimator, ClassifierMixin, TransformerMixin
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.metrics import roc_auc_score
 from sklearn.pipeline import Pipeline
+from sklearn.utils.multiclass import type_of_target, unique_labels
 from sklearn.utils.validation import check_is_fitted, validate_data
 
-from src.features.cleaning import clean
 from src.features.contract import features
-from src.features.derive import add_derived_features
 from src.models.heuristic import explain, score_frame
 from src.models.scorecard import Scorecard, default_scorecard
+from src.pipelines.prepare import prepare_features_frame
 
 CALIBRATION_CV = 5
 
@@ -36,7 +36,17 @@ class CreditPreparer(TransformerMixin, BaseEstimator):
     """
 
     def _prepare(self, X: pd.DataFrame) -> pd.DataFrame:
-        return features(add_derived_features(clean(X)))
+        # Same contract as prepare_features: validate, then narrow to the model view.
+        return features(prepare_features_frame(X))
+
+    def _align(self, X: pd.DataFrame) -> pd.DataFrame:
+        """Raw column order is not meaningful; a missing raw column is."""
+        esperadas = list(self.feature_names_in_)
+        faltantes = [c for c in esperadas if c not in X.columns]
+        if faltantes:
+            raise ValueError(f"Faltan columnas de entrada: {', '.join(faltantes)}")
+        sobrantes = [c for c in X.columns if c not in set(esperadas)]
+        return X[esperadas + sobrantes]
 
     def fit(self, X: pd.DataFrame, y=None) -> "CreditPreparer":
         # skip_check_array: the rules address columns by name, so X must stay a frame.
@@ -52,8 +62,10 @@ class CreditPreparer(TransformerMixin, BaseEstimator):
 
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
         check_is_fitted(self)
+        X = self._align(X)
         validate_data(self, X=X, skip_check_array=True, reset=False)
-        return self._prepare(X)
+        # Canonical output order, so a downstream estimator sees a stable feature space.
+        return self._prepare(X)[list(self.feature_names_out_)]
 
     def get_feature_names_out(self, input_features=None) -> np.ndarray:
         check_is_fitted(self)
@@ -86,8 +98,15 @@ class HeuristicModel(ClassifierMixin, BaseEstimator):
     def fit(self, X: pd.DataFrame, y) -> "HeuristicModel":
         """Learns nothing from the rules' point of view; it fixes the label and feature space."""
         X, y = validate_data(self, X=X, y=y, skip_check_array=True, reset=True)
-        y = np.asarray(y).astype(bool)
-        self.classes_ = np.array([False, True])
+        # Labels come from y rather than being assumed: astype(bool) would read
+        # ["0", "1"] as two defaults and calibrate against nonsense. A loan either
+        # defaulted or it did not, so anything but a binary target is a mistake.
+        y_type = type_of_target(y, input_name="y", raise_unknown=True)
+        if y_type != "binary":
+            raise ValueError(
+                f"Only binary classification is supported. The type of the target is {y_type}."
+            )
+        self.classes_ = unique_labels(y)
         self.scorecard_ = self._spec()
         self.threshold_ = self.scorecard_.threshold if self.threshold is None else self.threshold
         return self
@@ -110,7 +129,8 @@ class HeuristicModel(ClassifierMixin, BaseEstimator):
     def score(self, X: pd.DataFrame, y) -> float:
         """AUC, not accuracy: at a 4.75 % base rate accuracy rewards never flagging anyone."""
         check_is_fitted(self)
-        return float(roc_auc_score(np.asarray(y).astype(bool), self.decision_function(X)))
+        en_mora = np.asarray(y) == self.classes_[1]
+        return float(roc_auc_score(en_mora, self.decision_function(X)))
 
     def gini(self, X: pd.DataFrame, y) -> float:
         return 2 * self.score(X, y) - 1
@@ -124,6 +144,7 @@ class HeuristicModel(ClassifierMixin, BaseEstimator):
         # The rules address columns by name, so a bare ndarray is not valid input.
         tags.input_tags.two_d_array = False
         tags.target_tags.required = True
+        tags.classifier_tags.multi_class = False
         return tags
 
 
