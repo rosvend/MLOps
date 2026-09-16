@@ -140,7 +140,9 @@
 							"    });",
 							"});",
 							"",
-							"pm.test(\"the frozen review_flag ignores decision_threshold and follows only the response's own threshold\", function () {\n    const body = pm.response.json();\n    body.predictions.forEach(function (prediction) {\n        pm.expect(prediction.review_flag).to.eql(prediction.probability_default >= body.threshold);\n    });\n});"
+							"pm.test(\"the frozen review_flag ignores decision_threshold and follows only the response's own threshold\", function () {\n    const body = pm.response.json();\n    body.predictions.forEach(function (prediction) {\n        pm.expect(prediction.review_flag).to.eql(prediction.probability_default >= body.threshold);\n    });\n});",
+							"",
+							"pm.test(\"the custom threshold result is actually computed, not just present\", function () {\n    const body = pm.response.json();\n    body.predictions.forEach(function (prediction) {\n        pm.expect(prediction.review_flag_at_custom_threshold).to.eql(\n            prediction.probability_default >= 0.15\n        );\n    });\n});"
 						]
 					}
 				}

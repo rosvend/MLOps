@@ -142,3 +142,19 @@ def test_a_column_entirely_null_in_current_does_not_crash(spec, rng):
     resumen = run_drift_report(ref, cur, spec)
 
     assert isinstance(resumen, DriftSummary)
+
+
+def test_empty_columns_do_not_dilute_the_drift_share(spec, rng):
+    """The denominator must be the columns actually tested, not every shared column -
+    otherwise a batch of mostly-unsent optional fields could mask real drift."""
+    ref = pd.DataFrame({f"num{i}": rng.normal(0, 1, 500) for i in range(6)})
+    cur = ref.copy()
+    cur["num0"] = rng.normal(8, 1, 500)
+    cur["num1"] = rng.normal(8, 1, 500)
+    for c in ["num2", "num3", "num4", "num5"]:
+        cur[c] = pd.Series([None] * 500, dtype=object)
+
+    resumen = run_drift_report(ref, cur, spec)
+
+    assert resumen.drift_share == pytest.approx(1.0)  # 2 of the 2 columns actually tested
+    assert resumen.dataset_drift_detected is True

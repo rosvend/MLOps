@@ -89,3 +89,18 @@ def test_a_webhook_failure_never_raises(spec, caplog):
         send_alert("m", {}, spec, transport=httpx.MockTransport(transporte))
 
     assert "m" in caplog.text
+
+
+def test_a_non_success_webhook_response_is_treated_as_a_failure(spec, caplog):
+    """httpx does not raise on 4xx/5xx by itself - without raise_for_status a rejected
+    webhook would look delivered."""
+
+    def transporte(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404)
+
+    spec = spec.model_copy(update={"webhook_url": "https://hooks.example.com/alert"})
+
+    with caplog.at_level(logging.WARNING):
+        send_alert("m", {}, spec, transport=httpx.MockTransport(transporte))
+
+    assert "no se pudo entregar" in caplog.text

@@ -91,16 +91,18 @@ async def run_drift_check(background_tasks: BackgroundTasks) -> DriftCheckRespon
     """
     champion = _champion()
     spec = default_monitoring_spec()
-    referencia = load_reference(spec.reference_path)
+
+    def _cargar_y_comparar():
+        # load_reference (pd.read_parquet) and the drift computation are both blocking
+        # I/O/CPU work; both run in the thread pool, not just the heavier comparison -
+        # reading the parquet on the event loop thread would still delay other requests.
+        referencia = load_reference(spec.reference_path)
+        return run_live_drift_check(
+            referencia, load_predictions_log(), champion.meta["flagged_share_at_fit"], spec
+        )
 
     try:
-        resultado = await run_in_threadpool(
-            run_live_drift_check,
-            referencia,
-            load_predictions_log(),
-            champion.meta["flagged_share_at_fit"],
-            spec,
-        )
+        resultado = await run_in_threadpool(_cargar_y_comparar)
     except InsufficientCurrentData as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
 

@@ -143,7 +143,12 @@ def run_drift_report(
         for prueba in data["tests"]
         if _is_drifted(prueba["status"])
     )
-    drift_share = len(drifted) / len(compartidas) if compartidas else 0.0
+    # Denominator is the columns actually tested, not every shared column: an
+    # empty column carries no information either way and must not dilute the share
+    # of the columns that could genuinely be tested - diluting it could suppress
+    # dataset_drift_detected when the tested columns overwhelmingly drifted.
+    probadas = len(numericas) + len(categoricas)
+    drift_share = len(drifted) / probadas if probadas else 0.0
 
     return DriftSummary(
         dataset_drift_detected=drift_share > spec.drift_share_threshold,

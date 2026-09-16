@@ -10,6 +10,7 @@ and deliberately stops at feature/prediction/operational drift, with no accuracy
 has no label to support.
 """
 
+import json
 import logging
 from pathlib import Path
 
@@ -39,11 +40,14 @@ def run(config: Config) -> dict:
     p_tren = modelo.predict_proba(tren.X)[:, 1]
     p_prueba = modelo.predict_proba(prueba.X)[:, 1]
 
-    resumen_drift = run_drift_report(tren.X, prueba.X, spec)
+    # probability_default rides alongside the features so run_drift_report also covers
+    # prediction drift, not only feature drift - review_flag stays the separate plain
+    # proportion check below, matching the live endpoint's own split.
+    comparacion_tren = tren.X.assign(probability_default=p_tren)
+    comparacion_prueba = prueba.X.assign(probability_default=p_prueba)
+    resumen_drift = run_drift_report(comparacion_tren, comparacion_prueba, spec)
 
-    umbral = tren.X.pipe(lambda _: __import__("json").loads(
-        (RAIZ / config.serving.meta_path).read_text()
-    )["threshold"])
+    umbral = json.loads((RAIZ / config.serving.meta_path).read_text())["threshold"]
     calidad_tren = summarize_classification(tren.y.to_numpy(), p_tren, threshold=umbral)
     calidad_prueba = summarize_classification(prueba.y.to_numpy(), p_prueba, threshold=umbral)
 
@@ -65,8 +69,6 @@ def run(config: Config) -> dict:
     resumen_drift.save(RAIZ / spec.offline_report_html, RAIZ / spec.offline_report_json)
     # save() writes only the drift keys; the fuller report (model quality, operational)
     # is what this pipeline actually promises, so it overwrites the JSON with everything.
-    import json
-
     (RAIZ / spec.offline_report_json).write_text(json.dumps(informe, indent=2))
 
     if informe["dataset_drift_detected"]:

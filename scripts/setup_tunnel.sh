@@ -8,7 +8,7 @@ if ! command -v ngrok > /dev/null 2>&1; then
 fi
 
 # Tunnelling to a dead port publishes a 502, not an API.
-if ! curl -sf http://localhost:8000/health > /dev/null; then
+if ! curl -sf --connect-timeout 5 --max-time 10 http://localhost:8000/health > /dev/null; then
     echo "API is not running on :8000 - start it first with 'make serve' or 'docker compose up'" >&2
     exit 1
 fi

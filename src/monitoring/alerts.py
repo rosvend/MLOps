@@ -26,7 +26,9 @@ def send_alert(
     cuerpo = {"text": message, "content": message, **payload}
     try:
         with httpx.Client(transport=transport, timeout=5.0) as cliente:
-            cliente.post(spec.webhook_url, json=cuerpo)
+            # httpx does not raise on a 4xx/5xx response on its own - without this the
+            # webhook could reject every alert and the code would still call it delivered.
+            cliente.post(spec.webhook_url, json=cuerpo).raise_for_status()
     except httpx.HTTPError as exc:
         # An alert about a broken system must not itself take down the caller.
         _log.warning("no se pudo entregar el webhook de alerta: %s", exc)
