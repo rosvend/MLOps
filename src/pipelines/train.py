@@ -193,11 +193,14 @@ def run(config: Config) -> dict[str, Any]:
             # config objects, and skops' allow-list would have to enumerate every stdlib
             # container inside every estimator. These artifacts are produced and read by
             # this project only.
-            mlflow.sklearn.log_model(
+            registrado = mlflow.sklearn.log_model(
                 modelo,
                 name=nombre,
                 serialization_format=mlflow.sklearn.SERIALIZATION_FORMAT_CLOUDPICKLE,
             )
+            # The exact artifact, recorded now. Selecting by name and creation time later
+            # would pair one run's weights with another run's metrics.
+            resultado.model_id = registrado.model_id
             resultados.append(resultado)
             print(f"  {nombre}: cv {resultado.cv_mean:.4f}, "
                   f"oot {spec.selection.primary_metric} "

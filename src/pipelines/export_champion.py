@@ -50,18 +50,19 @@ def export(config: Config) -> dict:
 
     mlflow.set_tracking_uri(_tracking_uri(config.training.tracking_uri))
     _ensure_experiment(config.training)
-    experimento = mlflow.get_experiment_by_name(config.training.experiment)
-    modelos = [
-        m
-        for m in mlflow.search_logged_models(
-            experiment_ids=[experimento.experiment_id], output_format="list"
+    model_id = registro["champion"].get("model_id")
+    if not model_id:
+        raise RuntimeError(
+            "reports/champion.json no registra model_id; vuelve a correr `make train` "
+            "para que la selección anote qué artefacto exacto ganó"
         )
-        if m.name == nombre
-    ]
-    if not modelos:
-        raise RuntimeError(f"no hay modelo '{nombre}' en MLflow; corre `make train` primero")
-    elegido = max(modelos, key=lambda m: m.creation_timestamp)
-    modelo = mlflow.sklearn.load_model(f"models:/{elegido.model_id}")
+    try:
+        # By id, never by name and creation time: several runs log a model called
+        # 'logistic', and picking the newest would ship weights from one run with the
+        # metrics and threshold of another.
+        modelo = mlflow.sklearn.load_model(f"models:/{model_id}")
+    except Exception as exc:
+        raise RuntimeError(f"no se pudo cargar el modelo {model_id} de MLflow: {exc}") from exc
 
     # The cut-point comes from the training window only, and is frozen from here on.
     datos = split_out_of_time(
@@ -82,7 +83,7 @@ def export(config: Config) -> dict:
         "calibrated_on": f"training window before {datos.corte}",
         "features": list(config.features.feature_view_columns),
         "metrics": registro["champion"]["metrics"],
-        "mlflow_model_id": elegido.model_id,
+        "mlflow_model_id": model_id,
         "mlflow_run_id": registro["champion"].get("run_id"),
         "git_sha": _git_sha(),
     }

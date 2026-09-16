@@ -6,7 +6,10 @@ services:
     image: credito-scoring-api:local
     container_name: credito-scoring-api
     ports:
-      - "8000:8000"
+      # Loopback only: this compose file is for local batch scoring and the endpoint
+      # has no authentication. Exposing it on every interface would publish an
+      # unauthenticated scoring service to the network.
+      - "127.0.0.1:8000:8000"
     environment:
       SERVING_MODEL_PATH: /app/models/champion.joblib
       SERVING_META_PATH: /app/models/champion.meta.json

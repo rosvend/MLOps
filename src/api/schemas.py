@@ -10,6 +10,12 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.models.training_spec import default_serving_spec
+
+# Bound the list in the schema, not just in the handler: without it FastAPI parses and
+# validates every record before the size check could reject the request.
+_MAX_BATCH = default_serving_spec().max_batch_size
+
 # Bounds mirror the sentinels src/features/cleaning.py applies, so a value the pipeline
 # would silently null is refused at the edge instead, where the caller can see it.
 Dinero = Annotated[int, Field(ge=0, le=1_000_000_000_000)]
@@ -51,7 +57,7 @@ class ApplicationRecord(BaseModel):
 class BatchRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    records: list[ApplicationRecord] = Field(min_length=1)
+    records: list[ApplicationRecord] = Field(min_length=1, max_length=_MAX_BATCH)
 
 
 class Prediction(BaseModel):

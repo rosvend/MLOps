@@ -111,10 +111,11 @@ def test_the_threshold_comes_from_training_not_from_the_request(champion, crudo)
     predicciones = score(
         [_payload(f, i) for i, (_, f) in enumerate(crudo.head(300).iterrows())], champion
     )
-    marcados = sum(p["review_flag"] for p in predicciones)
 
+    # Only the identity matters: a correct frozen threshold may well flag ~15.7 % of a
+    # given sample by coincidence, so asserting it does not would be a flaky test.
     assert all(p["threshold"] == champion.threshold for p in predicciones)
-    assert marcados != pytest.approx(len(predicciones) * 0.157, abs=1)
+    assert champion.threshold == pytest.approx(float(champion.meta["threshold"]))
 
 
 def test_every_application_gets_its_own_id_back(champion, crudo):

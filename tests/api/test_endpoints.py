@@ -116,10 +116,12 @@ def test_an_empty_batch_is_refused(client):
     assert client.post("/predict/batch", json={"records": []}).status_code == 422
 
 
-def test_an_oversized_batch_is_refused(client, solicitud):
+def test_an_oversized_batch_is_refused_before_any_record_is_parsed(client, solicitud):
+    """422 rather than 413 on purpose: the bound lives in the schema, so the request is
+    rejected during validation instead of after the server has parsed every record."""
     from src.models.training_spec import default_serving_spec
 
     limite = default_serving_spec().max_batch_size
     registros = [{**solicitud, "application_id": f"APP-{i}"} for i in range(limite + 1)]
 
-    assert client.post("/predict/batch", json={"records": registros}).status_code == 413
+    assert client.post("/predict/batch", json={"records": registros}).status_code == 422

@@ -50,14 +50,9 @@ def health() -> Health:
 
 @app.post("/predict/batch", response_model=BatchResponse)
 def predict_batch(request: BatchRequest) -> BatchResponse:
+    # The batch size is bounded by BatchRequest itself, so an oversized request is
+    # refused during validation rather than after every record has been parsed.
     champion = _champion()
-    limite = champion.serving.max_batch_size
-    if len(request.records) > limite:
-        raise HTTPException(
-            status.HTTP_413_CONTENT_TOO_LARGE,
-            f"{len(request.records)} registros exceden el máximo de {limite}",
-        )
-
     registros = [r.model_dump() for r in request.records]
     try:
         predicciones = score(registros, champion)

@@ -1,4 +1,4 @@
-# Batch scoring (stage 8)
+# Batch scoring (stage 9 in the roadmap)
 
 The champion selected in stage 7 behind a batch prediction API, containerised.
 
@@ -106,5 +106,5 @@ docker compose exec scoring-api id     # uid=1001(scoring)
 
 ## Out of scope
 
-Stage 9: no drift detection, no performance monitoring, no alerting. This stage ends at a
-container that scores a batch.
+Monitoring (stage 10): no drift detection, no performance monitoring, no alerting. This
+stage ends at a container that scores a batch.
