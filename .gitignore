@@ -240,6 +240,11 @@ feature_repo/data/
 # Serving artifact: rebuilt by `make export-champion` from the recorded MLflow run
 models/*.joblib
 models/*.meta.json
+models/*.parquet
+
+# Monitoring: local SQLite request log and drift dashboards, both regenerated
+data/monitoring/
+!data/monitoring/.gitkeep
 
 # MLflow tracking store, artifacts and training reports
 mlflow.db

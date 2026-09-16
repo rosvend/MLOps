@@ -14,9 +14,9 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from evidently import Report
+from evidently import DataDefinition, Dataset, Report
 from evidently.legacy.tests.base_test import TestStatus
-from evidently.metrics import DriftedColumnsCount, ValueDrift
+from evidently.metrics import ValueDrift
 
 from src.monitoring.spec import MonitoringSpec
 
@@ -57,55 +57,74 @@ def _is_drifted(status) -> bool:
     return status == TestStatus.FAIL
 
 
+# Extension dtypes pandas needs for nullable data (Int64, Float64, boolean, the string[]
+# Feast returns for categoricals) are not what Evidently's column-type inference expects -
+# it raised "Cannot calculate drift metric ... type ColumnType.Unknown" on edad_cliente
+# (plain Int64) until this normalisation was added. Plain numpy dtypes only from here on;
+# NaN survives the cast (Evidently ignores it, unlike a mis-detected column type).
+_A_NUMERICO = {"Int64", "Float64", "boolean", "bool"}
+_A_TEXTO = {"string[python]", "string"}
+
+
+def _normalizar_tipos(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    for columna in df.columns:
+        dtype = str(df[columna].dtype)
+        if dtype in _A_NUMERICO:
+            df[columna] = df[columna].astype("float64")
+        elif dtype in _A_TEXTO or dtype == "category":
+            df[columna] = df[columna].astype("object")
+    return df
+
+
 def run_drift_report(
     reference: pd.DataFrame, current: pd.DataFrame, spec: MonitoringSpec
 ) -> DriftSummary:
     """Compares only the columns both frames share - a column unique to either side (a
     label, an id) is not a feature to compare and must not crash the report."""
     compartidas = [c for c in reference.columns if c in current.columns]
-    ref, cur = reference[compartidas], current[compartidas]
+    ref, cur = _normalizar_tipos(reference[compartidas]), _normalizar_tipos(current[compartidas])
 
     numericas = [c for c in compartidas if pd.api.types.is_numeric_dtype(ref[c])]
     categoricas = [c for c in compartidas if c not in numericas]
     metodos = {c: _numeric_method(spec, len(ref)) for c in numericas}
     metodos |= {c: spec.categorical_stattest for c in categoricas}
 
+    # drift_share and dataset_drift_detected are derived from these same per-column
+    # tests below, not from a separately-configured DriftedColumnsCount metric: that
+    # metric picks its own per-column significance internally, which does not
+    # necessarily agree with `alpha` here, and the two silently disagreeing on which
+    # columns counted as drifted is worse than not having the second metric at all.
     metricas = [
-        DriftedColumnsCount(
-            num_stattest=_numeric_method(spec, len(ref)),
-            cat_stattest=spec.categorical_stattest,
-            drift_share=spec.drift_share_threshold,
-        ),
+        ValueDrift(column=columna, method=metodos[columna], threshold=spec.alpha)
+        for columna in [*numericas, *categoricas]
     ]
-    for columna in numericas:
-        metricas.append(ValueDrift(column=columna, method=metodos[columna], threshold=spec.alpha))
-    for columna in categoricas:
-        metricas.append(ValueDrift(column=columna, method=metodos[columna], threshold=spec.alpha))
+
+    # An explicit DataDefinition, not Evidently's own inference: a low-cardinality
+    # numeric column (a count like huella_consulta) would otherwise be auto-classified
+    # categorical by Evidently's cardinality heuristic, disagreeing with the dtype-based
+    # split above and raising "stattest wasserstein isn't applicable to feature of type
+    # cat" the moment a numeric column crossed the sample-size cutoff into wasserstein.
+    definicion = DataDefinition(numerical_columns=numericas, categorical_columns=categoricas)
+    ref_ds = Dataset.from_pandas(ref, data_definition=definicion)
+    cur_ds = Dataset.from_pandas(cur, data_definition=definicion)
 
     report = Report(metrics=metricas, include_tests=True)
-    snapshot = report.run(current_data=cur, reference_data=ref)
+    snapshot = report.run(current_data=cur_ds, reference_data=ref_ds)
     data = snapshot.dict()
 
-    id_a_columna = {m["id"]: m["config"].get("column") for m in data["metrics"]}
-    id_a_valor = {m["id"]: m["value"] for m in data["metrics"]}
-    drifted: list[str] = []
-    dataset_drift_detected = False
-    drift_share = 0.0
-
-    for prueba in data["tests"]:
-        metric_id = prueba["metric_config"]["metric_id"]
-        columna = id_a_columna.get(metric_id)
-        if columna is None:
-            # The DriftedColumnsCount test: no column, it is the dataset-level verdict.
-            dataset_drift_detected = _is_drifted(prueba["status"])
-            drift_share = float(id_a_valor[metric_id]["share"])
-        elif _is_drifted(prueba["status"]):
-            drifted.append(columna)
+    id_a_columna = {m["id"]: m["config"]["column"] for m in data["metrics"]}
+    drifted = sorted(
+        id_a_columna[prueba["metric_config"]["metric_id"]]
+        for prueba in data["tests"]
+        if _is_drifted(prueba["status"])
+    )
+    drift_share = len(drifted) / len(compartidas) if compartidas else 0.0
 
     return DriftSummary(
-        dataset_drift_detected=dataset_drift_detected,
+        dataset_drift_detected=drift_share > spec.drift_share_threshold,
         drift_share=drift_share,
-        drifted_features=sorted(drifted),
+        drifted_features=drifted,
         methods_used=metodos,
         snapshot=snapshot,
     )
