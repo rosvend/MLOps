@@ -176,28 +176,44 @@ Every rule earns its place — removing any one of them costs Gini:
 
 ## As a scikit-learn estimator
 
-`src/models/estimator.py` wraps the rules so the scorecard is trained, scored and compared
-with the same calls as any other model:
+`src/models/estimator.py` splits the job the way scikit-learn splits it: one class ranks,
+another turns a rank into a probability.
 
 ```python
-pipe = Pipeline([("prep", CreditPreparer()), ("clf", HeuristicScorecard())])
-pipe.fit(X_train, y_train)          # fits the calibration only
-pipe.decision_function(X)           # raw integer score, frozen rules
-pipe.predict_proba(X)[:, 1]         # calibrated probability of default
+credit_pipeline().fit(X_train, y_train)   # prepare -> score -> calibrate
+pipe.predict_proba(X)[:, 1]               # probability of default
+pipe.predict(X)                           # flagged at the configured threshold
 cross_val_score(pipe, X, y, cv=5, scoring="roc_auc")
 ```
 
 `y` is the default indicator: `True` means the loan defaulted.
 
-**Only the calibration is learned.** `decision_function` needs no `fit` — the rules are frozen
-constants, so a score is a pure function of one application. `fit` learns a single isotonic map
-from score to probability of default, on the training fold alone, and `predict_proba` raises
-`NotFittedError` rather than ever falling back to an uncalibrated transform. The raw points are
-not a probability and are never rescaled into one.
+**`HeuristicScorecard` is a ranker, not a probability model.** `decision_function` returns the
+raw integer score. It deliberately has no `predict_proba`: the points are not a probability, and
+rescaling them into `[0, 1]` would only make them look like one.
 
-`score()` is overridden to return AUC rather than the accuracy `ClassifierMixin` would give:
-at a 4.75 % base rate a model that never flags anyone scores 95.25 % accuracy, so the inherited
-metric would rank this scorecard below doing nothing.
+**Calibration never sees the rows it scores.** `calibrated_scorecard()` wraps the ranker in
+`CalibratedClassifierCV(method="isotonic", cv=5)`, which fits one calibrator per fold on the
+other folds and averages them. Fitting isotonic on the same rows it then reports on was both
+optimistic and unusable:
+
+| | Isotonic fitted in-sample | Cross-fitted |
+| --- | ---: | ---: |
+| Train → test log-loss gap | 0.01715 | **0.00555** |
+| Highest probability of default | **1.0000** | 0.5464 |
+
+The second row is the one that mattered. A 21-point scale leaves small pure bands at the top,
+and isotonic handed them a probability of exactly 1.0 — a claim that this applicant will
+certainly default, which no credit model can make and which no amount of data supports here.
+
+`score()` is overridden to AUC. `ClassifierMixin` gives accuracy, and at a 4.75 % base rate a
+model that never flags anyone scores 95.25 %, so the inherited metric would rank this scorecard
+below doing nothing.
+
+Feature metadata is established and checked by `validate_data(..., skip_check_array=True)`, so
+`n_features_in_` and `feature_names_in_` are sklearn's to maintain rather than hand-written, and
+predicting on a different feature space raises instead of scoring something wrong. The rules
+address columns by name, so `skip_check_array` keeps the frame a frame.
 
 ### Out-of-fold results
 
@@ -209,10 +225,24 @@ metric would rank this scorecard below doing nothing.
 | **Gini** | **0.352** | 0.352 |
 
 They match, which is what frozen rules should do — nothing is fitted to the scored rows, so the
-calibration adds no optimism. **This does not retire the in-sample caveat below.** The band
+ranking carries no optimism. **This does not retire the in-sample caveat below.** The band
 cut-points and the weights were chosen by reading this same dataset before the code existed;
 cross-validation cannot detect that, because the choice happened outside the estimator. Only an
 out-of-time split, or a fresh vintage, can.
+
+### On `check_estimator`
+
+It reports success for both classes, and that result is empty: the DataFrame-only input tag makes
+it skip its entire suite, so exactly one check runs. Rather than bank a hollow pass, the
+applicable checks are enumerated and run directly — 24 against the scorecard and 16 against the
+preparer, including `check_dataframe_column_names_consistency`,
+`check_n_features_in_after_fitting`, `check_estimators_unfitted` and
+`check_no_attributes_set_in_init`. A test guards the count so the suite cannot silently collapse
+back to a skip.
+
+DataFrame-only is a safety property, not a limitation: the rules pay points for a *missing*
+value, so accepting an unnamed array would make every rule take its "absent" branch and score a
+blank application as high-risk rather than raising.
 
 ## Limitations
 
