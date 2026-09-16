@@ -125,3 +125,58 @@ def test_an_oversized_batch_is_refused_before_any_record_is_parsed(client, solic
     registros = [{**solicitud, "application_id": f"APP-{i}"} for i in range(limite + 1)]
 
     assert client.post("/predict/batch", json={"records": registros}).status_code == 422
+
+
+# --- the optional decision_threshold override -----------------------------------
+
+
+def test_the_frozen_review_flag_never_moves_with_a_custom_threshold(client, solicitud, isolated_log):
+    """The additivity guarantee: same applicant, same frozen answer, whatever else
+    the caller asks about."""
+    sin_override = client.post("/predict/batch", json={"records": [solicitud]}).json()
+    con_override = client.post(
+        "/predict/batch", json={"records": [solicitud], "decision_threshold": 0.9}
+    ).json()
+
+    assert sin_override["predictions"][0]["review_flag"] == con_override["predictions"][0]["review_flag"]
+    assert sin_override["predictions"][0]["probability_default"] == pytest.approx(
+        con_override["predictions"][0]["probability_default"]
+    )
+    assert sin_override["threshold"] == con_override["threshold"]
+
+
+def test_a_custom_threshold_can_disagree_with_the_frozen_decision(client, solicitud, isolated_log):
+    cuerpo = client.post(
+        "/predict/batch", json={"records": [solicitud], "decision_threshold": 0.0}
+    ).json()
+
+    pred = cuerpo["predictions"][0]
+    assert pred["review_flag_at_custom_threshold"] is True  # everything clears p >= 0.0
+    # ... while the frozen decision is whatever the real threshold says, independently.
+
+
+def test_without_an_override_the_custom_field_is_absent(client, solicitud, isolated_log):
+    cuerpo = client.post("/predict/batch", json={"records": [solicitud]}).json()
+
+    assert cuerpo["predictions"][0]["review_flag_at_custom_threshold"] is None
+
+
+# --- request logging --------------------------------------------------------------
+
+
+def test_a_scored_batch_is_logged(client, solicitud, isolated_log):
+    client.post("/predict/batch", json={"records": [solicitud]})
+
+    logueado = isolated_log.read_all()
+    assert len(logueado) == 1
+    assert logueado.iloc[0]["application_id"] == solicitud["application_id"]
+    assert "probability_default" in logueado.columns
+    assert "capital_prestado" in logueado.columns
+
+
+def test_every_record_in_a_batch_is_logged(client, solicitud, isolated_log):
+    registros = [{**solicitud, "application_id": f"APP-{i:03d}"} for i in range(5)]
+
+    client.post("/predict/batch", json={"records": registros})
+
+    assert isolated_log.count() == 5
