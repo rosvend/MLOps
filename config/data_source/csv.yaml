@@ -1,0 +1,3 @@
+type: csv
+path: data/raw/BD_creditos.csv
+separator: ";"
