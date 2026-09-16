@@ -1,7 +1,7 @@
 import pandas as pd
 import pandera.pandas as pa
 
-from src.features.derive import RANGO_EDAD_LABELS
+from src.features.derive import COLUMNAS_VIGILADAS, RANGO_EDAD_LABELS
 from src.features.cleaning import (
     EDAD_ADULTA,
     EDAD_MAXIMA,
@@ -47,19 +47,34 @@ class CreditoFeaturesSchema(pa.DataFrameModel):
     promedio_ingresos_datacredito: pd.Int64Dtype = pa.Field(gt=0, nullable=True)
     tendencia_ingresos: pd.CategoricalDtype = pa.Field(isin=TENDENCIAS, nullable=True)
 
-    cuota_supera_salario: bool = pa.Field()
+    cuota_supera_salario: pd.BooleanDtype = pa.Field(nullable=True)
     dti: pd.Float64Dtype = pa.Field(ge=0, nullable=True)
     pti: pd.Float64Dtype = pa.Field(ge=0, nullable=True)
     monto_sobre_ingreso: pd.Float64Dtype = pa.Field(ge=0, nullable=True)
     ratio_ingreso_declarado_bureau: pd.Float64Dtype = pa.Field(ge=0, nullable=True)
     creditos_por_anio_adulto: pd.Float64Dtype = pa.Field(ge=0, nullable=True)
-    tiene_mora_bureau: bool = pa.Field()
+    tiene_mora_bureau: pd.BooleanDtype = pa.Field(nullable=True)
     rango_edad: pd.CategoricalDtype = pa.Field(isin=RANGO_EDAD_LABELS, nullable=True)
     mes_prestamo: str = pa.Field(str_matches=r"^\d{4}-\d{2}$")
+
+    falta_edad_cliente: bool = pa.Field()
+    falta_salario_cliente: bool = pa.Field()
+    falta_puntaje_datacredito: bool = pa.Field()
+    falta_promedio_ingresos_datacredito: bool = pa.Field()
+    falta_tendencia_ingresos: bool = pa.Field()
+    falta_saldo_total: bool = pa.Field()
+    falta_saldo_principal: bool = pa.Field()
+    falta_saldo_mora: bool = pa.Field()
 
     class Config:
         strict = True
         coerce = True
+
+    @pa.dataframe_check
+    def indicadores_cubren_las_columnas_vigiladas(cls, df: pd.DataFrame) -> bool:
+        """The indicators and COLUMNAS_VIGILADAS must not drift apart."""
+        declarados = {c for c in df.columns if c.startswith("falta_")}
+        return declarados == {f"falta_{c}" for c in COLUMNAS_VIGILADAS}
 
     @pa.dataframe_check
     def saldo_principal_no_supera_total(cls, df: pd.DataFrame) -> pd.Series:

@@ -9,6 +9,9 @@ EDAD_ADULTA = 18
 EDAD_MAXIMA = 100
 PUNTAJE_BUREAU_MIN, PUNTAJE_BUREAU_MAX = 150, 950
 SALARIO_MAXIMO = 1_000_000_000
+# The bureau reports balances in thousands of COP; everything else here is pesos.
+MILES = 1_000
+SALDOS_EN_MILES = ["saldo_mora", "saldo_total", "saldo_principal"]
 
 _COLUMNAS_SIN_VARIANZA = ["saldo_mora_codeudor"]
 _ENTEROS = [
@@ -95,6 +98,16 @@ def coerce_types(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def scale_bureau_balances(df: pd.DataFrame) -> pd.DataFrame:
+    """Stored in thousands by the bureau; a median of 16 178 COP against a 3 000 000 salary
+    is not a real balance. Confirmed with the business 2026-09-16."""
+    df = df.copy()
+    for columna in SALDOS_EN_MILES:
+        if columna in df:
+            df[columna] = df[columna] * MILES
+    return df
+
+
 def group_rare_credit_types(df: pd.DataFrame) -> pd.DataFrame:
     """Residual product codes carry no sample; kept apart so they cannot fake a finding."""
     df = df.copy()
@@ -109,7 +122,8 @@ def group_rare_credit_types(df: pd.DataFrame) -> pd.DataFrame:
 def flag_inconsistencies(df: pd.DataFrame) -> pd.DataFrame:
     """Marked rather than removed: dropping them would bias the very rate we measure."""
     df = df.copy()
-    df["cuota_supera_salario"] = (df["cuota_pactada"] > df["salario_cliente"]).fillna(False).astype(bool)
+    # Nullable on purpose: an unverifiable salary is not an affordable instalment.
+    df["cuota_supera_salario"] = (df["cuota_pactada"] > df["salario_cliente"]).astype("boolean")
     return df
 
 
@@ -117,5 +131,6 @@ def clean(df: pd.DataFrame) -> pd.DataFrame:
     df = nullify_sentinels(df)
     df = drop_unusable_columns(df)
     df = coerce_types(df)
+    df = scale_bureau_balances(df)
     df = group_rare_credit_types(df)
     return flag_inconsistencies(df)
