@@ -11,8 +11,8 @@ from sklearn.pipeline import Pipeline
 from src.features.contract import TARGET
 from src.models.estimator import (
     CreditPreparer,
-    HeuristicScorecard,
-    calibrated_scorecard,
+    HeuristicModel,
+    calibrated_model,
     credit_pipeline,
 )
 from src.pipelines.prepare import prepare_labelled
@@ -33,11 +33,11 @@ def crudo(raw):
 
 
 def test_it_is_recognised_as_a_classifier():
-    assert is_classifier(HeuristicScorecard())
+    assert is_classifier(HeuristicModel())
 
 
 def test_params_round_trip_through_clone():
-    original = HeuristicScorecard(threshold=7)
+    original = HeuristicModel(threshold=7)
 
     copia = clone(original)
 
@@ -46,14 +46,14 @@ def test_params_round_trip_through_clone():
 
 
 def test_set_params_reaches_the_estimator():
-    modelo = HeuristicScorecard().set_params(threshold=9)
+    modelo = HeuristicModel().set_params(threshold=9)
 
     assert modelo.get_params()["threshold"] == 9
 
 
 def test_the_constructor_stores_its_arguments_untouched():
     """sklearn's check_no_attributes_set_in_init: no validation or derived state in __init__."""
-    modelo = HeuristicScorecard(threshold=3)
+    modelo = HeuristicModel(threshold=3)
 
     publicos = {a for a in vars(modelo) if not a.startswith("_")}
     assert publicos == set(modelo.get_params())
@@ -62,7 +62,7 @@ def test_the_constructor_stores_its_arguments_untouched():
 
 def test_fit_returns_self(datos):
     X, y = datos
-    modelo = HeuristicScorecard()
+    modelo = HeuristicModel()
 
     assert modelo.fit(X, y) is modelo
 
@@ -70,7 +70,7 @@ def test_fit_returns_self(datos):
 def test_fit_records_the_label_space_and_the_feature_space(datos):
     X, y = datos
 
-    modelo = HeuristicScorecard().fit(X, y)
+    modelo = HeuristicModel().fit(X, y)
 
     assert list(modelo.classes_) == [False, True]
     assert modelo.n_features_in_ == X.shape[1]
@@ -81,15 +81,15 @@ def test_predicting_before_fitting_raises(datos):
     X, _ = datos
 
     with pytest.raises(NotFittedError):
-        HeuristicScorecard().predict(X)
+        HeuristicModel().predict(X)
 
 
 def test_predict_returns_labels_from_the_declared_class_space(datos):
     X, y = datos
 
-    pred = HeuristicScorecard().fit(X, y).predict(X)
+    pred = HeuristicModel().fit(X, y).predict(X)
 
-    assert set(np.unique(pred)) <= set(HeuristicScorecard().fit(X, y).classes_)
+    assert set(np.unique(pred)) <= set(HeuristicModel().fit(X, y).classes_)
     assert pred.shape == (len(X),)
 
 
@@ -100,7 +100,7 @@ def test_decision_function_is_the_raw_scorecard_score(datos):
     from src.models.heuristic import score_frame
 
     X, y = datos
-    modelo = HeuristicScorecard().fit(X, y)
+    modelo = HeuristicModel().fit(X, y)
 
     assert list(modelo.decision_function(X)) == list(score_frame(X))
 
@@ -110,7 +110,7 @@ def test_decision_function_follows_the_fitted_contract(datos):
     X, _ = datos
 
     with pytest.raises(NotFittedError):
-        HeuristicScorecard().decision_function(X)
+        HeuristicModel().decision_function(X)
 
 
 def test_the_rules_are_still_usable_without_an_estimator(datos):
@@ -124,7 +124,7 @@ def test_the_rules_are_still_usable_without_an_estimator(datos):
 
 def test_predicting_on_a_different_feature_space_is_caught(datos):
     X, y = datos
-    modelo = HeuristicScorecard().fit(X, y)
+    modelo = HeuristicModel().fit(X, y)
 
     with pytest.raises(ValueError, match="feature names should match"):
         modelo.decision_function(X.drop(columns=["dti"]))
@@ -134,7 +134,7 @@ def test_the_bare_scorecard_offers_no_probability(datos):
     """The points are not a probability; nothing pretends otherwise."""
     X, y = datos
 
-    assert not hasattr(HeuristicScorecard().fit(X, y), "predict_proba")
+    assert not hasattr(HeuristicModel().fit(X, y), "predict_proba")
 
 
 def test_predict_proba_returns_a_real_distribution(crudo):
@@ -154,7 +154,7 @@ def test_calibrated_probabilities_are_monotone_in_the_score(crudo):
     modelo = credit_pipeline(cv=3).fit(X, y)
 
     preparado = CreditPreparer().fit_transform(X)
-    scores = HeuristicScorecard().fit(preparado, y).decision_function(preparado)
+    scores = HeuristicModel().fit(preparado, y).decision_function(preparado)
     pd_ = modelo.predict_proba(X)[:, 1]
     orden = np.argsort(scores, kind="stable")
 
@@ -192,7 +192,7 @@ def test_the_calibration_never_sees_the_rows_it_scores(crudo):
 def test_score_reports_ranking_power_not_accuracy(crudo):
     """At a 4.75% base rate, accuracy would rank a constant 'never defaults' model higher."""
     X, y = crudo
-    modelo = Pipeline([("prep", CreditPreparer()), ("clf", HeuristicScorecard())]).fit(X, y)
+    modelo = Pipeline([("prep", CreditPreparer()), ("clf", HeuristicModel())]).fit(X, y)
 
     assert 0.5 < modelo.score(X, y) < 1.0
 
@@ -243,7 +243,7 @@ def test_seeing_more_test_rows_never_changes_an_applicants_probability(crudo):
 
 def test_it_survives_cross_validation(crudo):
     X, y = crudo
-    pipe = Pipeline([("prep", CreditPreparer()), ("clf", HeuristicScorecard())])
+    pipe = Pipeline([("prep", CreditPreparer()), ("clf", HeuristicModel())])
 
     puntajes = cross_val_score(pipe, X, y, cv=3, scoring="roc_auc")
 
@@ -316,7 +316,7 @@ def _run(nombre: str, estimator) -> None:
 
 @pytest.mark.parametrize("check", CHECKS_CLASIFICADOR)
 def test_sklearn_checks_on_the_scorecard(check):
-    _run(check, HeuristicScorecard())
+    _run(check, HeuristicModel())
 
 
 @pytest.mark.parametrize("check", CHECKS_TRANSFORMADOR)

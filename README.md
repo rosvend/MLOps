@@ -43,7 +43,7 @@ held-out split belongs with the first trained model. Full rule table, exclusions
 [`docs/heuristic-model.md`](docs/heuristic-model.md).
 
 The scorecard is a scikit-learn classifier, so it drops into a `Pipeline` and
-`cross_val_score` alongside any trained model that follows. `HeuristicScorecard` ranks;
+`cross_val_score` alongside any trained model that follows. `HeuristicModel` ranks;
 `credit_pipeline()` adds an isotonic calibration fitted out-of-fold, so a probability of
 default never comes from a calibration that saw the row it is scoring. Out-of-fold Gini is
 0.352, the same as in-sample — frozen rules do not overfit, though the bands were still

@@ -1,8 +1,12 @@
-"""scikit-learn surface for the heuristic scorecard.
+"""scikit-learn surface for the heuristic model.
 
 The rules stay frozen pure functions. Responsibilities are split the way sklearn
-splits them: `HeuristicScorecard` ranks, `calibrated_scorecard()` turns a rank into
-a probability, and it does so with a calibration that never sees the rows it scores.
+splits them: `HeuristicModel` ranks, `calibrated_model()` turns a rank into a
+probability, and it does so with a calibration that never sees the rows it scores.
+
+Not to be confused with `Scorecard` in src/models/scorecard.py, which is the config
+object holding the weights and cut-points - `HeuristicModel` is the estimator that
+applies them.
 
 `y` is the default indicator: True means the loan defaulted.
 """
@@ -62,14 +66,14 @@ class CreditPreparer(TransformerMixin, BaseEstimator):
         return tags
 
 
-class HeuristicScorecard(ClassifierMixin, BaseEstimator):
-    """Frozen additive scorecard; higher score means higher risk.
+class HeuristicModel(ClassifierMixin, BaseEstimator):
+    """The heuristic baseline as an sklearn classifier; higher score means higher risk.
 
     A ranker, not a probability model. `decision_function` is the raw integer score and
     is a pure function of one application - no batch statistic, no learned state. There
     is deliberately no `predict_proba`: the points are not a probability, and rescaling
     them into [0, 1] would only make them look like one. For a calibrated probability of
-    default use `calibrated_scorecard()`, which fits the calibration out-of-fold.
+    default use `calibrated_model()`, which fits the calibration out-of-fold.
     """
 
     def __init__(self, *, threshold: int | None = None, scorecard: Scorecard | None = None):
@@ -79,7 +83,7 @@ class HeuristicScorecard(ClassifierMixin, BaseEstimator):
     def _spec(self) -> Scorecard:
         return self.scorecard or default_scorecard()
 
-    def fit(self, X: pd.DataFrame, y) -> "HeuristicScorecard":
+    def fit(self, X: pd.DataFrame, y) -> "HeuristicModel":
         """Learns nothing from the rules' point of view; it fixes the label and feature space."""
         X, y = validate_data(self, X=X, y=y, skip_check_array=True, reset=True)
         y = np.asarray(y).astype(bool)
@@ -123,7 +127,7 @@ class HeuristicScorecard(ClassifierMixin, BaseEstimator):
         return tags
 
 
-def calibrated_scorecard(cv: int = CALIBRATION_CV, **kwargs) -> CalibratedClassifierCV:
+def calibrated_model(cv: int = CALIBRATION_CV, **kwargs) -> CalibratedClassifierCV:
     """Probability of default, from a calibration that never sees the rows it scores.
 
     Isotonic fitted on the same rows it then reports on is optimistic and, on a 21-point
@@ -131,9 +135,9 @@ def calibrated_scorecard(cv: int = CALIBRATION_CV, **kwargs) -> CalibratedClassi
     make. CalibratedClassifierCV fits one calibrator per fold on the other folds and
     averages them, which removes both problems.
     """
-    return CalibratedClassifierCV(HeuristicScorecard(**kwargs), method="isotonic", cv=cv)
+    return CalibratedClassifierCV(HeuristicModel(**kwargs), method="isotonic", cv=cv)
 
 
 def credit_pipeline(cv: int = CALIBRATION_CV, **kwargs) -> Pipeline:
     """prepare -> score -> calibrate, as one estimator."""
-    return Pipeline([("prep", CreditPreparer()), ("clf", calibrated_scorecard(cv, **kwargs))])
+    return Pipeline([("prep", CreditPreparer()), ("clf", calibrated_model(cv, **kwargs))])

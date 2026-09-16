@@ -188,11 +188,11 @@ cross_val_score(pipe, X, y, cv=5, scoring="roc_auc")
 
 `y` is the default indicator: `True` means the loan defaulted.
 
-**`HeuristicScorecard` is a ranker, not a probability model.** `decision_function` returns the
+**`HeuristicModel` is a ranker, not a probability model.** `decision_function` returns the
 raw integer score. It deliberately has no `predict_proba`: the points are not a probability, and
 rescaling them into `[0, 1]` would only make them look like one.
 
-**Calibration never sees the rows it scores.** `calibrated_scorecard()` wraps the ranker in
+**Calibration never sees the rows it scores.** `calibrated_model()` wraps the ranker in
 `CalibratedClassifierCV(method="isotonic", cv=5)`, which fits one calibrator per fold on the
 other folds and averages them. Fitting isotonic on the same rows it then reports on was both
 optimistic and unusable:
