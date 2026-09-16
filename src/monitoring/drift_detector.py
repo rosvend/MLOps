@@ -85,10 +85,34 @@ def run_drift_report(
     compartidas = [c for c in reference.columns if c in current.columns]
     ref, cur = _normalizar_tipos(reference[compartidas]), _normalizar_tipos(current[compartidas])
 
+    # Classified from the reference alone: current is live-logged data (SQLite -> JSON ->
+    # DataFrame), and a column that is entirely null in the logged sample comes back
+    # object dtype regardless of what it is in the reference - is_numeric_dtype on
+    # current would then disagree with the reference's own classification.
     numericas = [c for c in compartidas if pd.api.types.is_numeric_dtype(ref[c])]
     categoricas = [c for c in compartidas if c not in numericas]
     metodos = {c: _numeric_method(spec, len(ref)) for c in numericas}
     metodos |= {c: spec.categorical_stattest for c in categoricas}
+
+    # Both frames coerced to the type the reference's classification promised, not
+    # merely to "a plain numpy dtype" - current's actual dtype can still disagree with
+    # what it was classified as, and Evidently has no tolerance for that mismatch.
+    for columna in numericas:
+        ref[columna] = pd.to_numeric(ref[columna], errors="coerce")
+        cur[columna] = pd.to_numeric(cur[columna], errors="coerce")
+    for columna in categoricas:
+        ref[columna] = ref[columna].astype(object)
+        cur[columna] = cur[columna].astype(object)
+
+    # A column with zero non-null values on either side has nothing to test drift on -
+    # Evidently refuses outright ("An empty column ... was provided"), correctly. Skipped
+    # rather than crashing every other column's result along with it; logged so the gap
+    # is visible rather than silently absent from drifted_features.
+    vacias = [c for c in [*numericas, *categoricas] if ref[c].isna().all() or cur[c].isna().all()]
+    if vacias:
+        _log.warning("columnas sin datos para probar drift, omitidas: %s", vacias)
+    numericas = [c for c in numericas if c not in vacias]
+    categoricas = [c for c in categoricas if c not in vacias]
 
     # drift_share and dataset_drift_detected are derived from these same per-column
     # tests below, not from a separately-configured DriftedColumnsCount metric: that

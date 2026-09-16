@@ -130,3 +130,15 @@ def test_saving_the_report_writes_both_files(spec, rng, tmp_path):
 
     datos = json.loads(json_path.read_text())
     assert datos["drift_share"] == pytest.approx(resumen.drift_share)
+
+
+def test_a_column_entirely_null_in_current_does_not_crash(spec, rng):
+    """A live-logged column with no values yet comes back object dtype (JSON round-trip),
+    disagreeing with the reference's numeric dtype - this must not crash the report."""
+    ref, cur = _frames(rng)
+    ref["puntaje_datacredito"] = rng.normal(750, 50, len(ref))
+    cur["puntaje_datacredito"] = pd.Series([None] * len(cur), dtype=object)
+
+    resumen = run_drift_report(ref, cur, spec)
+
+    assert isinstance(resumen, DriftSummary)

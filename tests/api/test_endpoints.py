@@ -62,7 +62,7 @@ def test_health_does_not_claim_an_online_store(client):
     assert "offline" in cuerpo["feature_store"] or "registry" in cuerpo["feature_store"]
 
 
-def test_a_batch_is_scored(client, solicitud):
+def test_a_batch_is_scored(client, solicitud, isolated_log):
     respuesta = client.post("/predict/batch", json={"records": [solicitud]})
 
     assert respuesta.status_code == 200
@@ -74,7 +74,7 @@ def test_a_batch_is_scored(client, solicitud):
     assert pred["review_flag"] == (pred["probability_default"] >= cuerpo["threshold"])
 
 
-def test_several_records_come_back_in_order(client, solicitud):
+def test_several_records_come_back_in_order(client, solicitud, isolated_log):
     registros = [{**solicitud, "application_id": f"APP-{i:05d}"} for i in range(5)]
 
     cuerpo = client.post("/predict/batch", json={"records": registros}).json()
@@ -85,7 +85,7 @@ def test_several_records_come_back_in_order(client, solicitud):
     assert cuerpo["flagged"] == sum(p["review_flag"] for p in cuerpo["predictions"])
 
 
-def test_optional_bureau_fields_may_be_absent(client, solicitud):
+def test_optional_bureau_fields_may_be_absent(client, solicitud, isolated_log):
     """Missing bureau data is information the model handles, not a reason to refuse."""
     sin_bureau = {k: v for k, v in solicitud.items()
                   if k not in ("puntaje_datacredito", "promedio_ingresos_datacredito",
