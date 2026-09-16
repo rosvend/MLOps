@@ -5,6 +5,7 @@
 This project builds an MLOps pipeline end-to-end. It goes all the way from ingestion and EDA, to deployment and monitoring. 
 
 ## Code Style
+Prefer simpler code, the code must be easy to understand, do not overengineer things. 
 
 Modular, loosely coupled components; KISS and YAGNI by default; SOLID reserved for complex business logic, favouring single responsibility and injected
 dependencies. Do not overcomment the code, use single line comments.

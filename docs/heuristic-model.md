@@ -174,6 +174,79 @@ Every rule earns its place — removing any one of them costs Gini:
 | `missing_bureau_income` | 0.3463 | −0.0061 |
 | `young_independent` | 0.3466 | −0.0058 |
 
+## As a scikit-learn estimator
+
+`src/models/estimator.py` splits the job the way scikit-learn splits it: one class ranks,
+another turns a rank into a probability.
+
+```python
+credit_pipeline().fit(X_train, y_train)   # prepare -> score -> calibrate
+pipe.predict_proba(X)[:, 1]               # probability of default
+pipe.predict(X)                           # flagged at the configured threshold
+cross_val_score(pipe, X, y, cv=5, scoring="roc_auc")
+```
+
+`y` is the default indicator: `True` means the loan defaulted.
+
+**`HeuristicModel` is a ranker, not a probability model.** `decision_function` returns the
+raw integer score. It deliberately has no `predict_proba`: the points are not a probability, and
+rescaling them into `[0, 1]` would only make them look like one.
+
+**Calibration never sees the rows it scores.** `calibrated_model()` wraps the ranker in
+`CalibratedClassifierCV(method="isotonic", cv=5)`, which fits one calibrator per fold on the
+other folds and averages them. Fitting isotonic on the same rows it then reports on was both
+optimistic and unusable:
+
+| | Isotonic fitted in-sample | Cross-fitted |
+| --- | ---: | ---: |
+| Train → test log-loss gap | 0.01715 | **0.00555** |
+| Highest probability of default | **1.0000** | 0.5464 |
+
+The second row is the one that mattered. A 21-point scale leaves small pure bands at the top,
+and isotonic handed them a probability of exactly 1.0 — a claim that this applicant will
+certainly default, which no credit model can make and which no amount of data supports here.
+
+`score()` is overridden to AUC. `ClassifierMixin` gives accuracy, and at a 4.75 % base rate a
+model that never flags anyone scores 95.25 %, so the inherited metric would rank this scorecard
+below doing nothing.
+
+Feature metadata is established and checked by `validate_data(..., skip_check_array=True)`, so
+`n_features_in_` and `feature_names_in_` are sklearn's to maintain rather than hand-written, and
+predicting on a different feature space raises instead of scoring something wrong. The rules
+address columns by name, so `skip_check_array` keeps the frame a frame.
+
+### Out-of-fold results
+
+5-fold stratified cross-validation over all 10 763 loans:
+
+| Metric | Out-of-fold | In-sample |
+| --- | ---: | ---: |
+| AUC | 0.676 | 0.676 |
+| **Gini** | **0.352** | 0.352 |
+
+They match, which is what frozen rules should do — nothing is fitted to the scored rows, so the
+ranking carries no optimism. **This does not retire the in-sample caveat below.** The band
+cut-points and the weights were chosen by reading this same dataset before the code existed;
+cross-validation cannot detect that, because the choice happened outside the estimator. Only an
+out-of-time split, or a fresh vintage, can.
+
+### On `check_estimator`
+
+It reports success for both classes, and that result is empty: the DataFrame-only input tag makes
+it skip its entire suite, so exactly one check runs. Rather than bank a hollow pass, the
+applicable checks are enumerated and run directly — 29 against the model and 16 against the
+preparer, including `check_dataframe_column_names_consistency`,
+`check_n_features_in_after_fitting`, `check_estimators_unfitted`,
+`check_classifier_not_supporting_multiclass` and `check_no_attributes_set_in_init`. A test
+guards the count so the suite cannot silently collapse back to a skip.
+
+`classes_` comes from `y` via `unique_labels`, and a non-binary target is refused: a loan
+either defaulted or it did not.
+
+DataFrame-only is a safety property, not a limitation: the rules pay points for a *missing*
+value, so accepting an unnamed array would make every rule take its "absent" branch and score a
+blank application as high-risk rather than raising.
+
 ## Limitations
 
 - **In-sample.** Bands and points were measured on the same 10 763 loans they are scored against,
