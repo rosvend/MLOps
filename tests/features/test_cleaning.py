@@ -120,3 +120,20 @@ def test_ages_below_adulthood_are_nulled_like_any_other_impossible_value(raw):
     nullified = nullify_sentinels(_con_columna(raw, "edad_cliente", [17, 30, 122]))
 
     assert nullified["edad_cliente"].isna().tolist() == [True, False, True]
+
+
+@pytest.mark.parametrize("dtype", ["int64", "str", "float64"])
+def test_product_codes_group_the_same_whatever_type_the_source_sends(raw, dtype):
+    """4, "4" and 4.0 are the same product code; a text source must not become all Otro."""
+    df = raw.assign(tipo_credito=raw["tipo_credito"].astype(dtype))
+
+    grouped = clean(df)["tipo_credito"].value_counts().to_dict()
+
+    assert grouped == clean(raw)["tipo_credito"].value_counts().to_dict()
+    assert grouped["Otro"] < len(raw)
+
+
+def test_a_scoring_payload_need_not_carry_the_column_we_only_delete(raw):
+    sin_codeudor = raw.drop(columns=["saldo_mora_codeudor"])
+
+    assert "saldo_mora_codeudor" not in drop_unusable_columns(sin_codeudor).columns
