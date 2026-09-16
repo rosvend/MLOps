@@ -8,6 +8,7 @@ dependencies = [
     "cookiecutter>=2.7.1",
     "dvc>=3.67.1",
     "fastapi>=0.141.1",
+    "feast>=0.66.0",
     "hydra-core>=1.3.5",
     "jupyter>=1.1.1",
     "matplotlib>=3.11.1",

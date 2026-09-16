@@ -95,3 +95,23 @@ def test_materialise_writes_a_readable_parquet(sample_source, spec, tmp_path):
     assert len(recargado) == len(escrito)
     assert list(recargado.columns) == list(escrito.columns)
     assert recargado[spec.entity_key].is_unique
+
+
+def test_no_column_is_dictionary_encoded(sample_source, spec, tmp_path):
+    """Feast has no Categorical type and its file store reads through pyarrow."""
+    import pyarrow.parquet as pq
+
+    destino = tmp_path / "features.parquet"
+    materialise(sample_source, spec, destino)
+
+    esquema = pq.read_schema(destino)
+    dictionarys = [f.name for f in esquema if "dictionary" in str(f.type)]
+    assert dictionarys == []
+
+
+def test_the_category_vocabulary_survives_as_strings(tabla, spec):
+    """The vocabulary is enforced by the spec and the schema, not by parquet encoding."""
+    valores = set(tabla["tipo_credito"].dropna())
+
+    assert valores <= set(spec.vocabularies.tipos_credito)
+    assert str(tabla["tipo_credito"].dtype) == "string"

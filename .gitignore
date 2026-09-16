@@ -233,3 +233,6 @@ src/models/*.joblib
 # Hydra run outputs
 outputs/
 multirun/
+
+# Feast registry is a build artifact: feast apply regenerates it
+feature_repo/data/

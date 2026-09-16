@@ -98,3 +98,50 @@ engineering:
 
 # Where the materialised feature table lands, ready for Feast to register.
 output_path: data/processed/features.parquet
+
+# Feast requires timezone-aware event timestamps. The source carries no zone, so it is
+# read as UTC; point-in-time joins depend on ordering, which localising cannot change.
+event_timestamp_timezone: UTC
+
+# Feast feature views. Grouped so a consumer can pull only what it needs; the spec
+# validates that these cover every feature column exactly once.
+feature_views:
+  credito_solicitud:      # what the applicant declares on the form
+    - tipo_credito
+    - capital_prestado
+    - plazo_meses
+    - edad_cliente
+    - tipo_laboral
+    - salario_cliente
+    - total_otros_prestamos
+    - cuota_pactada
+  credito_bureau:         # the DataCredito block, an origination-time pull
+    - puntaje_datacredito
+    - cant_creditosvigentes
+    - huella_consulta
+    - saldo_mora
+    - saldo_total
+    - saldo_principal
+    - creditos_sectorFinanciero
+    - creditos_sectorCooperativo
+    - creditos_sectorReal
+    - promedio_ingresos_datacredito
+    - tendencia_ingresos
+  credito_derivadas:      # ratios, bands and contrast flags computed per row
+    - cuota_supera_salario
+    - dti
+    - pti
+    - monto_sobre_ingreso
+    - ratio_ingreso_declarado_bureau
+    - creditos_por_anio_adulto
+    - tiene_mora_bureau
+    - rango_edad
+  credito_faltantes:      # absence is information
+    - falta_edad_cliente
+    - falta_salario_cliente
+    - falta_puntaje_datacredito
+    - falta_promedio_ingresos_datacredito
+    - falta_tendencia_ingresos
+    - falta_saldo_total
+    - falta_saldo_principal
+    - falta_saldo_mora

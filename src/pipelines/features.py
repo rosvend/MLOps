@@ -35,7 +35,17 @@ def build_feature_table(source: DataSource, spec: FeatureSpec) -> pd.DataFrame:
     """Entity key, event timestamp, then every row-independent feature."""
     prepared = prepare_features(source, spec)
     columnas = [spec.entity_key, spec.event_timestamp, *feature_names(prepared.columns, spec)]
-    return prepared[columnas].copy()
+    tabla = prepared[columnas].copy()
+    # Feast has no Categorical type and its file store reads through pyarrow, which would
+    # see a dictionary type. The vocabulary is enforced by the spec and the pandera schema,
+    # not by parquet encoding, so nothing is lost by storing plain strings.
+    categoricas = [c for c in tabla.columns if str(tabla[c].dtype) == "category"]
+    tabla[categoricas] = tabla[categoricas].astype("string")
+    # Feast needs a timezone-aware event timestamp; the source carries no zone.
+    tabla[spec.event_timestamp] = pd.to_datetime(tabla[spec.event_timestamp]).dt.tz_localize(
+        spec.event_timestamp_timezone
+    )
+    return tabla
 
 
 def materialise(source: DataSource, spec: FeatureSpec, destino: str | Path) -> pd.DataFrame:

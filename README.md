@@ -21,6 +21,7 @@ src/pipelines/          prepare_features() / prepare_labelled(): read -> clean -
                         score():   prepare -> score -> evaluate
 tests/                  pytest, on a small hand-written fixture
 docs/heuristic-model.md every rule, the EDA rate behind it, and the limitations
+feature_repo/           Feast offline feature store: entity, four feature views
 ```
 
 ## Getting started
@@ -52,6 +53,10 @@ chosen on this dataset.
 Thresholds and weights are config, not code: `python -m src.pipelines.score model.threshold=5`,
 or `--multirun model.threshold=3,4,5,6` to sweep. Every run records the exact scorecard that
 produced it under `outputs/`.
+
+`make feast-apply` registers the feature table with Feast for offline retrieval, and
+`make feast-verify` proves the point-in-time join holds — zero features returned before a
+loan was originated. Details in [`docs/feature-store.md`](docs/feature-store.md).
 
 ## Swapping the data source
 

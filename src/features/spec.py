@@ -129,6 +129,8 @@ class FeatureSpec(BaseModel):
     columns: Columns
     engineering: Engineering
     output_path: str
+    event_timestamp_timezone: str = "UTC"
+    feature_views: dict[str, list[str]]
 
     @property
     def no_son_features(self) -> frozenset[str]:
@@ -141,6 +143,22 @@ class FeatureSpec(BaseModel):
         repetidos = {c for c in reservados if reservados.count(c) > 1}
         if repetidos:
             raise ValueError(f"una columna no puede tener dos roles: {sorted(repetidos)}")
+        return self
+
+    @property
+    def feature_view_columns(self) -> list[str]:
+        return [c for columnas in self.feature_views.values() for c in columnas]
+
+    @model_validator(mode="after")
+    def _views_partition_the_features(self):
+        """Every feature belongs to exactly one view: none duplicated, none forgotten."""
+        todas = self.feature_view_columns
+        repetidas = {c for c in todas if todas.count(c) > 1}
+        if repetidas:
+            raise ValueError(f"columnas en más de una feature view: {sorted(repetidas)}")
+        reservadas = self.no_son_features & set(todas)
+        if reservadas:
+            raise ValueError(f"una feature view no puede exponer columnas reservadas: {sorted(reservadas)}")
         return self
 
     @model_validator(mode="after")

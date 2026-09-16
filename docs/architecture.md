@@ -55,8 +55,8 @@ Green outline is shipped, orange is next in dependency order, dashed grey is lat
 | 2 | Access | `DataSource` port + adapter | `src/data/` | shipped |
 | 3 | Prepare | pandas | `src/features/`, `src/pipelines/prepare.py` | shipped |
 | 4 | Validate | pandera | `src/data/schema.py` | shipped |
-| 5 | Feature engineering | pandas | `src/features/` | next |
-| 6 | Feature store | Feast | — | next |
+| 5 | Feature engineering | pandas | `src/features/` | shipped |
+| 6 | Feature store | Feast | `feature_repo/` | shipped (offline only) |
 | 7 | Train | scikit-learn | `src/models/` | next |
 | 8 | Track + register | MLflow | — | next |
 | 9 | Serve | FastAPI + Docker | `src/deployment/`, `docker/` | later |
