@@ -78,6 +78,53 @@ def test_refitting_on_more_data_changes_the_caps(real):
     assert pequeno.caps_ != grande.caps_
 
 
+# --- nothing opaque may be silently turned into a number ----------------------
+
+
+def test_fitting_without_the_contract_is_refused(sample_source):
+    """The vintage leak: a timestamp coerces to int64 nanoseconds, correlation 1.0 with
+    the loan date. An id or a period string coerces to NaN and then to a constant."""
+    prepared = prepare_labelled(sample_source).drop(columns=[default_spec().target])
+
+    with pytest.raises(ValueError, match="fecha_prestamo"):
+        FeatureEngineer().fit(prepared)
+
+
+def test_a_column_that_stops_being_numeric_is_refused_at_transform(X):
+    fe = FeatureEngineer().fit(X)
+    roto = X.copy()
+    roto["dti"] = roto["dti"].astype("string")
+
+    with pytest.raises(ValueError, match="dti"):
+        fe.transform(roto)
+
+
+# --- non-finite values may not reach a model ----------------------------------
+
+
+def test_an_all_infinite_ratio_never_reaches_the_output(X):
+    """inf poisons both statistics - the p99 cap becomes NaN and the median inf - and
+    then survives, because inf is not a null and the completeness check only sees nulls."""
+    roto = X.copy()
+    roto["ratio_ingreso_declarado_bureau"] = np.inf
+
+    salida = FeatureEngineer().fit_transform(roto)
+
+    assert np.isfinite(salida.to_numpy()).all()
+
+
+def test_one_infinite_ratio_still_clips_to_the_cap(X):
+    """An unpayable ratio is the extreme of the distribution, not a missing value."""
+    roto = X.copy()
+    roto.loc[roto.index[0], "dti"] = np.inf
+
+    fe = FeatureEngineer().fit(roto)
+    salida = fe.transform(roto)
+
+    assert np.isfinite(fe.caps_["dti"])
+    assert salida["dti"].iloc[0] == pytest.approx(np.log1p(fe.caps_["dti"]))
+
+
 # --- one row scores the same alone as in a batch ------------------------------
 
 

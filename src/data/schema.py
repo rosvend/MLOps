@@ -63,11 +63,10 @@ class CreditoFeaturesSchema(pa.DataFrameModel):
         strict = True
         coerce = True
 
-    @pa.dataframe_check
-    def indicadores_cubren_las_columnas_vigiladas(cls, df: pd.DataFrame) -> bool:
-        """The indicators and spec.columns.vigiladas must not drift apart."""
-        declarados = {c for c in df.columns if c.startswith("falta_")}
-        return declarados == {f"falta_{c}" for c in _SPEC.columns.vigiladas}
+    # The falta_ fields above are literals because pandera declares columns as class
+    # attributes. strict=True rejects any drift from them before a dataframe check could
+    # run, so what keeps them aligned with spec.columns.vigiladas is a test:
+    # tests/data/test_schema.py::test_the_declared_indicators_match_the_watched_columns.
 
     @pa.dataframe_check
     def saldo_principal_no_supera_total(cls, df: pd.DataFrame) -> pd.Series:

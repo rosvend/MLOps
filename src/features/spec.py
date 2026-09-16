@@ -150,6 +150,18 @@ class FeatureSpec(BaseModel):
             raise ValueError(f"engineering no puede tocar columnas reservadas: {sorted(chocan)}")
         return self
 
+    @model_validator(mode="after")
+    def _age_bands_cover_the_accepted_ages(self):
+        """An accepted age with no band gets rango_edad = NA, and the scorecard then pays
+        it the "age unknown" points although the age is known - silently, with no error."""
+        joven, mayor = self.bounds.edad
+        # pd.cut leaves the first edge open, so it has to sit below the youngest age.
+        if self.age_bands.bins[0] >= joven or self.age_bands.bins[-1] < mayor:
+            raise ValueError(
+                f"age_bands.bins {self.age_bands.bins} no cubre bounds.edad {[joven, mayor]}"
+            )
+        return self
+
 
 @lru_cache(maxsize=1)
 def default_spec() -> FeatureSpec:

@@ -3,7 +3,7 @@
 import pandas as pd
 import pytest
 
-from src.features.spec import default_spec
+from src.features.spec import FeatureSpec, default_spec
 from src.pipelines.features import build_feature_table, materialise
 
 
@@ -59,6 +59,31 @@ def test_the_table_holds_only_row_independent_values(sample_source, spec, raw):
     assert parcial[compartidas].reset_index(drop=True).equals(
         completo.head(5)[compartidas].reset_index(drop=True)
     )
+
+
+def _variando(spec, **cambios):
+    """A spec differing from the default in one group, with its validators re-run."""
+    return FeatureSpec(**{**spec.model_dump(), **cambios})
+
+
+def test_the_injected_spec_drives_cleaning_not_only_the_column_roles(sample_source, spec):
+    """An override honoured by feature_names but ignored by clean() builds an incoherent table."""
+    plano = _variando(spec, units={**spec.units.model_dump(), "factor": 1})
+
+    escalado = build_feature_table(sample_source, spec)
+    sin_escalar = build_feature_table(sample_source, plano)
+
+    assert (sin_escalar["saldo_total"] * spec.units.factor).equals(escalado["saldo_total"])
+
+
+def test_the_injected_spec_drives_sentinel_nulling(sample_source, spec):
+    estrecho = _variando(spec, bounds={**spec.bounds.model_dump(), "edad": [40, 100]})
+
+    tabla = build_feature_table(sample_source, estrecho)
+
+    assert tabla["edad_cliente"].dropna().min() >= 40
+    por_defecto = build_feature_table(sample_source, spec)
+    assert tabla["falta_edad_cliente"].sum() > por_defecto["falta_edad_cliente"].sum()
 
 
 def test_materialise_writes_a_readable_parquet(sample_source, spec, tmp_path):

@@ -33,7 +33,7 @@ _log = logging.getLogger(__name__)
 
 def build_feature_table(source: DataSource, spec: FeatureSpec) -> pd.DataFrame:
     """Entity key, event timestamp, then every row-independent feature."""
-    prepared = prepare_features(source)
+    prepared = prepare_features(source, spec)
     columnas = [spec.entity_key, spec.event_timestamp, *feature_names(prepared.columns, spec)]
     return prepared[columnas].copy()
 

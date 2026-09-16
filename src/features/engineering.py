@@ -44,10 +44,31 @@ class FeatureEngineer(TransformerMixin, BaseEstimator):
     def _categoricas(X: pd.DataFrame) -> list[str]:
         return [c for c in X.columns if str(X[c].dtype) == "category"]
 
+    @staticmethod
+    def _rechazar_columnas_opacas(X: pd.DataFrame) -> None:
+        """Coercing anything that is not already a number is never harmless here.
+
+        A timestamp coerces to int64 nanoseconds - the vintage itself, correlation 1.0
+        with the loan date - and text coerces to NaN and then to a constant. Both are
+        silent. The only valid input is the view built by src/features/contract.py.
+        """
+        opacas = {
+            c: str(X[c].dtype)
+            for c in X.columns
+            if str(X[c].dtype) != "category" and not pd.api.types.is_numeric_dtype(X[c].dtype)
+        }
+        if opacas:
+            raise ValueError(
+                "FeatureEngineer sólo admite columnas numéricas o categóricas; aplica antes "
+                f"src.features.contract.features(): {opacas}"
+            )
+
     def _numerico(self, X: pd.DataFrame) -> pd.DataFrame:
+        self._rechazar_columnas_opacas(X)
         marco = X[self._numericas(X)].copy()
         for columna in marco.columns:
-            marco[columna] = pd.to_numeric(marco[columna], errors="coerce").astype("float64")
+            # errors="raise": the dtypes are already checked, so a NaN here would be a bug.
+            marco[columna] = pd.to_numeric(marco[columna], errors="raise").astype("float64")
         return marco
 
     def fit(self, X: pd.DataFrame, y=None) -> "FeatureEngineer":
@@ -55,7 +76,9 @@ class FeatureEngineer(TransformerMixin, BaseEstimator):
         spec = self._spec()
         self.heavy_tailed_ = list(spec.engineering.heavy_tailed)
         self.log_scale_ = list(spec.engineering.log_scale)
-        numerico = self._numerico(X)
+        # ±inf sits on no scale: one of them makes a p99 NaN, which silently disables the
+        # cap, and makes a median inf, which then imputes inf. Statistics ignore them.
+        numerico = self._numerico(X).replace([np.inf, -np.inf], np.nan)
         self.caps_ = {
             c: float(numerico[c].quantile(self._quantile()))
             for c in self.heavy_tailed_
@@ -73,6 +96,9 @@ class FeatureEngineer(TransformerMixin, BaseEstimator):
         for columna, tope in self.caps_.items():
             if columna in numerico:
                 numerico[columna] = numerico[columna].clip(upper=tope)
+        # An unpayable ratio is the extreme of the distribution, so the clip above already
+        # mapped +inf onto the cap. What survives had no cap, so treat it as unknown.
+        numerico = numerico.replace([np.inf, -np.inf], np.nan)
         for columna, mediana in self.medianas_.items():
             if columna in numerico:
                 # Impute before the log, so the filled value is on the same scale as the
