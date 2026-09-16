@@ -60,7 +60,7 @@ Green outline is shipped, orange is next in dependency order, dashed grey is lat
 | 7 | Train | scikit-learn, XGBoost, LightGBM, Optuna | `src/models/`, `src/pipelines/train.py` | shipped |
 | 8 | Track + register | MLflow | `mlflow.db` | tracking shipped, registry next |
 | 9 | Serve | FastAPI + Docker | `src/api/`, `docker/` | shipped (batch) |
-| 10 | Monitor | Evidently | `src/monitoring/` | later |
+| 10 | Monitor | Evidently | `src/monitoring/` | shipped |
 | — | Versioning | DVC | — | next |
 | — | CI | GitHub Actions | `.github/workflows/` | shipped |
 | — | Baseline | heuristic scorecard | `src/models/` | shipped |

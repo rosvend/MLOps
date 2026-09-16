@@ -1,83 +1,64 @@
-# MLOps
+# MLOps — credit scoring
 
-End-to-end MLOps pipeline, from training to monitoring, for loan applications in a Colombian bank.
+End-to-end MLOps pipeline for loan default risk: raw CSV → feature store → tuned model →
+batch API → drift monitoring, for a Colombian bank's loan book.
 
 ## Tech stack
 
-Feast (feature store) · MLflow (experiment tracking & monitoring) · W&B (experiment tracking) ·
-DVC (data versioning) · Pydantic + Hydra · Great Expectations · Evidently AI (monitoring & data
-drift) · FastAPI · Docker
+pandas + pandera (prep & validation) · scikit-learn (`FeatureEngineer`, the champion
+pipeline) · Feast (offline feature store) · Optuna (hyperparameter search) · XGBoost /
+LightGBM (candidates) · MLflow (experiment tracking) · FastAPI + Docker (batch serving) ·
+Evidently AI (drift) · Hydra + pydantic (config, everywhere) · uv (dependency management)
 
-## Layout
+## Pipeline
 
-```text
-config/                 Hydra config groups: data_source/ and model/
-data/raw/               BD_creditos.csv, 10 763 loans (DVC takes over later)
-notebooks/eda.ipynb     the exploratory analysis and its findings
-src/data/               DataSource port, CSV adapter, pandera contract
-src/features/           cleaning, derived features, and the leakage contract
-src/models/             scorecard rules, its sklearn estimator, and the metrics
-src/pipelines/          prepare_features() / prepare_labelled(): read -> clean -> derive -> validate
-                        score():   prepare -> score -> evaluate
-tests/                  pytest, on a small hand-written fixture
-docs/heuristic-model.md every rule, the EDA rate behind it, and the limitations
-feature_repo/           Feast offline feature store: entity, four feature views
-```
+| Stage | What | Where |
+| --- | --- | --- |
+| 1–4 | Ingest, clean, derive features, validate (pandera contract) | `src/data/`, `src/features/`, `src/pipelines/prepare.py` |
+| 5 | Fitted transforms (winsorise, impute, encode) — refit per fold, never globally | `src/features/engineering.py` |
+| 6 | Offline feature store, point-in-time correct | `feature_repo/`, `src/pipelines/features.py` |
+| 7 | Tune 3 candidates + the heuristic baseline, select on a held-out out-of-time window | `src/pipelines/train.py` |
+| 8 | Export the champion, serve it behind a batch API, containerise | `src/pipelines/export_champion.py`, `src/api/` |
+| 9 | Drift detection, request logging, alerting | `src/monitoring/` |
 
-## Getting started
+Full detail per stage in `docs/`: [architecture](docs/architecture.md) ·
+[feature engineering](docs/feature-engineering.md) · [feature store](docs/feature-store.md) ·
+[model training](docs/model-training.md) · [serving](docs/serving.md) ·
+[monitoring](docs/monitoring.md).
+
+## Run it end to end
 
 ```bash
 make install
-make test
-make eda
-make score
+make features feast-apply          # build the feature table + offline store
+make train                         # tune, track in MLflow, select a champion (~2.5 min)
+make export-champion export-reference
+docker compose up --build          # batch API at :8000, monitoring endpoint included
+make monitor                       # offline drift + model-quality report
 ```
 
-## Baseline model
-
-`make score` runs the heuristic scorecard over the portfolio. It is a rule-based baseline read
-straight off the EDA — one pure function per finding, points summed, no fitting — and it exists to
-set the bar a trained model has to clear: **Gini 0.352 in-sample** against the bureau score's
-0.248, with the riskiest band defaulting at 12.3 % and the safest at 1.8 %. The bands and points
-were measured on the same loans they are scored against, so these numbers are optimistic — a
-held-out split belongs with the first trained model. Full rule table, exclusions and caveats in
-[`docs/heuristic-model.md`](docs/heuristic-model.md).
-
-The scorecard is a scikit-learn classifier, so it drops into a `Pipeline` and
-`cross_val_score` alongside any trained model that follows. `HeuristicModel` ranks;
-`credit_pipeline()` adds an isotonic calibration fitted out-of-fold, so a probability of
-default never comes from a calibration that saw the row it is scoring. Out-of-fold Gini is
-0.352, the same as in-sample — frozen rules do not overfit, though the bands were still
-chosen on this dataset.
-
-Thresholds and weights are config, not code: `python -m src.pipelines.score model.threshold=5`,
-or `--multirun model.threshold=3,4,5,6` to sweep. Every run records the exact scorecard that
-produced it under `outputs/`.
-
-`make feast-apply` registers the feature table with Feast for offline retrieval, and
-`make feast-verify` proves the point-in-time join holds — zero features returned before a
-loan was originated. Details in [`docs/feature-store.md`](docs/feature-store.md).
-
-`make train` tunes logistic regression, XGBoost and LightGBM with Optuna, tracks every run
-in MLflow and picks a champion on a held-out window of the newest vintages. Details and the
-results table in [`docs/model-training.md`](docs/model-training.md).
-
-`make export-champion` exports the stage-7 champion as a joblib artifact with its frozen
-decision threshold, and `docker compose up --build` serves it at `POST /predict/batch`.
-Details in [`docs/serving.md`](docs/serving.md).
-
-## Swapping the data source
-
-`src/pipelines/prepare.py` is the single seam the rest of the pipeline attaches to. It takes any
-object with a `read() -> DataFrame` method, so moving from the raw CSV to a cloud database means
-adding one adapter next to `src/data/csv_source.py`, registering it in `src/data/factory.py`, and
-pointing `config/data_source/` at it. No other module changes.
-
-```yaml
-# config/data_source/csv.yaml
-type: csv
-path: data/raw/BD_creditos.csv
-separator: ";"
+```bash
+curl -X POST localhost:8000/predict/batch -H 'Content-Type: application/json' -d '{
+  "records": [{"application_id":"APP-1","tipo_credito":"9","capital_prestado":4200000,
+    "plazo_meses":24,"edad_cliente":23,"tipo_laboral":"Independiente","salario_cliente":1200000,
+    "total_otros_prestamos":3500000,"cuota_pactada":390000,"puntaje_datacredito":680,
+    "cant_creditosvigentes":7,"huella_consulta":11,"tendencia_ingresos":"Decreciente"}]}'
 ```
 
-Select it with `data_source=csv`, or point a run at another adapter without editing a file.
+## Results
+
+Out-of-time (train on the oldest 75% of vintages, test on the newest):
+
+| Model | Gini | PR-AUC |
+| --- | ---: | ---: |
+| Heuristic scorecard (8 rules, frozen, no fitting) | 0.324 | 0.059 |
+| **Champion — logistic regression** (Optuna-tuned) | **0.327** | **0.129** |
+
+The champion is the first model in the project to beat the hand-built baseline on both
+metrics — 2.2× the incumbent on PR-AUC, which is what matters at a 4.75% default rate. It
+was chosen on the held-out window, not cross-validation: the best CV model (XGBoost,
+0.187 CV mean) was the *worst* out-of-time (0.091 PR-AUC) — a reminder that this book has
+real vintage structure a shuffled fold cannot see.
+
+Full comparison and the reasoning behind the selection protocol in
+[`docs/model-training.md`](docs/model-training.md).
