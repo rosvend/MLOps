@@ -1,10 +1,19 @@
 """The split must be honest about time, and the label must never be a feature."""
 
+from pathlib import Path
+
 import pytest
 
 from src.features.spec import default_spec
 from src.models.dataset import Dataset, split_out_of_time
 from src.models.training_spec import Split, default_training_spec
+
+
+REGISTRY = Path(__file__).resolve().parents[2] / "feature_repo" / "data" / "registry.db"
+
+pytestmark = pytest.mark.skipif(
+    not REGISTRY.exists(), reason="run `make feast-apply` first to build the registry"
+)
 
 
 @pytest.fixture(scope="module")

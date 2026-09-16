@@ -66,7 +66,7 @@ def test_transformers_are_refitted_on_every_fold(datos):
 def test_a_fold_never_sees_the_statistics_of_the_whole_book(datos):
     """A fold's cap must come from its own training rows, not from all of them."""
     X, y = datos
-    pipe = build_model("sklearn.linear_model.LogisticRegression", {"max_iter": 200})
+    pipe = build_model("sklearn.linear_model.LogisticRegression", {"max_iter": 200}, scale=True)
 
     resultado = cross_validate(
         pipe, X, y, cv=StratifiedKFold(3, shuffle=True, random_state=0), return_estimator=True
