@@ -8,7 +8,7 @@ something end-to-end to run against, and to set the bar any learned model has to
 
 One pure function per EDA finding, each looking at a single application and returning points.
 The score is their sum; higher means riskier. A loan is flagged when the score reaches the
-threshold in `config/config.yaml`.
+threshold in `config/model/heuristic.yaml`.
 
 ```python
 score  = sum(rule(record) for rule in RULES)
@@ -17,13 +17,20 @@ flagged = score >= threshold
 
 Points come from one formula, not from judgement:
 
-```
+```text
 points = round((band default rate / portfolio default rate - 1) * 4)
 ```
 
-So a band that doubles the portfolio's 4.75 % costs +4, and one that halves it pays −2. Band
-cut-points live in `src/models/thresholds.py` and are frozen. They are never recomputed per
-batch, so one application scores the same alone as it does inside a portfolio.
+So a band that doubles the portfolio's 4.75 % costs +4, and one that halves it pays −2. The base
+rate and the ×4 multiplier are recorded in `config/model/heuristic.yaml` alongside the weights
+they generated, so the scorecard can be regenerated from the repo rather than from this page.
+
+Band cut-points live in the same file and are frozen. They are never recomputed per batch, so one
+application scores the same alone as it does inside a portfolio.
+
+An application with nothing filled in scores **5** — above the threshold of 4 — because absence
+itself charges points in three rules. That is deliberate: maximum uncertainty goes to manual
+review. A missing *column*, as opposed to a missing value, raises instead of scoring.
 
 ## The rules
 
@@ -85,7 +92,7 @@ to the bureau's estimate does, and monotonically.
 | 1.081 – 1.807 | 1 952 | 3.84 % | 0.81 | **−1** |
 | 1.807 – 3.594 | 1 951 | 4.87 % | 1.03 | **0** |
 | ≥ 3.594 | 1 952 | 5.79 % | 1.22 | **+1** |
-| missing | 2 956 | — | — | **0** (charged by `missing_bureau_income`) |
+| missing | 2 956 | — | — | **0** |
 
 ### `decreasing_income_trend` — stacks with over-declaration
 
@@ -94,7 +101,7 @@ to the bureau's estimate does, and monotonically.
 | Decreciente | 1 291 | 6.27 % | 1.32 | **+1** |
 | Estable | 1 188 | 4.63 % | 0.98 | **0** |
 | Creciente | 5 294 | 3.91 % | 0.82 | **−1** |
-| missing | 2 990 | — | — | **0** (charged by `missing_bureau_income`) |
+| missing | 2 990 | — | — | **0** |
 
 ### `high_amount_long_term` — the one lever the bank sets itself
 
@@ -104,6 +111,11 @@ to the bureau's estimate does, and monotonically.
 | no | 10 137 | 4.36 % | 0.92 | **0** |
 
 ### `missing_bureau_income` — absence is information
+
+The three missing counts above are not the same set. The income-gap ratio is also null when
+`salario_cliente` is itself a sentinel (2 956), and `tendencia_ingresos` carries its own
+missingness (2 990), while the bureau income block is missing for 2 937. So roughly 19 records
+with no income-gap ratio and ~53 with no income trend are *not* charged by this rule.
 
 | bureau income block | n | default | lift | points |
 | --- | ---: | ---: | ---: | ---: |

@@ -1,8 +1,6 @@
-from pathlib import Path
-
 import pandas as pd
 
-from src.config import DEFAULT_CONFIG_PATH, load_config
+from src.config import load_config
 from src.data.factory import build_source
 from src.data.schema import CreditoFeaturesSchema, CreditoLabelledSchema
 from src.data.source import DataSource
@@ -26,5 +24,5 @@ def prepare(source: DataSource) -> pd.DataFrame:
     return prepare_labelled(source)
 
 
-def prepare_from_config(config_path: str | Path = DEFAULT_CONFIG_PATH) -> pd.DataFrame:
-    return prepare_labelled(build_source(load_config(config_path).data_source))
+def prepare_from_config(overrides: list[str] | None = None) -> pd.DataFrame:
+    return prepare_labelled(build_source(load_config(overrides).data_source))

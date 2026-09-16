@@ -1,5 +1,7 @@
 import numpy as np
+import pytest
 
+from src.features.derive import RANGO_EDAD_LABELS
 from src.models import rules
 
 
@@ -46,7 +48,7 @@ def test_inquiry_bands_split_at_three_and_six(neutral_record):
 def test_the_youngest_band_is_the_most_expensive(neutral_record):
     youngest = rules.age_band(neutral_record(rango_edad="18-25"))
 
-    assert youngest == max(rules.age_band(neutral_record(rango_edad=b)) for b in rules.PUNTOS_RANGO_EDAD)
+    assert youngest == max(rules.age_band(neutral_record(rango_edad=b)) for b in RANGO_EDAD_LABELS)
 
 
 def test_age_points_decline_across_the_first_four_bands(neutral_record):
@@ -107,3 +109,14 @@ def test_a_small_loan_over_a_long_term_costs_nothing(neutral_record):
 def test_a_missing_bureau_income_block_costs_points(neutral_record):
     assert rules.missing_bureau_income(neutral_record(promedio_ingresos_datacredito=None)) > 0
     assert rules.missing_bureau_income(neutral_record()) == 0
+
+
+def test_every_age_band_the_pipeline_can_produce_has_a_weight(neutral_record):
+    """The band labels and the points table must not drift apart."""
+    for banda in RANGO_EDAD_LABELS:
+        assert isinstance(rules.age_band(neutral_record(rango_edad=banda)), int)
+
+
+def test_an_unknown_band_raises_instead_of_scoring_zero(neutral_record):
+    with pytest.raises(KeyError, match="rango_edad"):
+        rules.age_band(neutral_record(rango_edad="66-100"))
