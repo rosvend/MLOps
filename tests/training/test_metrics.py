@@ -92,3 +92,29 @@ def test_brier_is_withheld_for_a_non_probabilistic_score(desbalanceado):
 
     assert math.isnan(resumen["brier"])
     assert resumen["roc_auc"] == pytest.approx(1.0)
+
+
+def test_a_metric_name_that_does_not_exist_is_rejected_at_config_load():
+    """Caught when the config loads, not by a champion chosen at random six minutes later."""
+    from pydantic import ValidationError
+
+    from src.models.training_spec import Selection
+
+    with pytest.raises(ValidationError, match="pr_au"):
+        Selection(
+            primary_metric="pr_au",
+            report_metrics=["pr_au", "gini"],
+            cv_scoring="average_precision",
+            flagged_share=0.157,
+        )
+
+
+def test_a_single_class_batch_says_why_roc_is_missing(caplog):
+    import logging
+    import math
+
+    with caplog.at_level(logging.WARNING):
+        resumen = summarize_classification(np.zeros(10, dtype=bool), np.linspace(0, 1, 10))
+
+    assert math.isnan(resumen["roc_auc"])
+    assert "una sola clase" in caplog.text

@@ -8,6 +8,8 @@ src/models/evaluate.py stays as the scorecard-oriented decile view; this module 
 probability-oriented one, and reuses its gini conversion rather than re-deriving it.
 """
 
+import logging
+
 import numpy as np
 from sklearn.metrics import (
     average_precision_score,
@@ -20,6 +22,8 @@ from sklearn.metrics import (
 )
 
 from src.models.evaluate import gini_from_auc
+
+_log = logging.getLogger(__name__)
 
 METRICAS = ("pr_auc", "roc_auc", "gini", "f1", "precision", "recall", "brier")
 
@@ -37,7 +41,15 @@ def summarize_classification(
     y_score = np.asarray(y_score, dtype=float)
     flagged = y_score >= threshold
 
-    roc = float(roc_auc_score(y_true, y_score))
+    if y_true.all() or not y_true.any():
+        _log.warning(
+            "ROC/Gini no calculables: el lote trae una sola clase (%d de %d en mora)",
+            int(y_true.sum()),
+            len(y_true),
+        )
+        roc = float("nan")
+    else:
+        roc = float(roc_auc_score(y_true, y_score))
     tn, fp, fn, tp = confusion_matrix(y_true, flagged, labels=[False, True]).ravel()
     return {
         "pr_auc": float(average_precision_score(y_true, y_score)),

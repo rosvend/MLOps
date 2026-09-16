@@ -8,6 +8,7 @@ The incumbent heuristic is a candidate like any other. A selector that cannot re
 model already in place is not making a decision, it is rubber-stamping one.
 """
 
+import math
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -29,8 +30,12 @@ class CandidateResult:
     tuned: bool = True
 
     def score(self, metric: str) -> float:
+        """NaN means the evaluation did not produce this metric, so it must not compete."""
         valor = self.metrics.get(metric)
-        return float("-inf") if valor is None else float(valor)
+        if valor is None:
+            return float("-inf")
+        valor = float(valor)
+        return float("-inf") if math.isnan(valor) else valor
 
 
 def comparison_table(resultados: list[CandidateResult], metricas: list[str]) -> pd.DataFrame:
@@ -44,13 +49,26 @@ def comparison_table(resultados: list[CandidateResult], metricas: list[str]) -> 
 
 
 def select_champion(resultados: list[CandidateResult], metric: str) -> CandidateResult:
-    """Highest out-of-time primary metric wins; fold stability breaks a tie."""
+    """Highest out-of-time primary metric wins; fold stability breaks a tie.
+
+    A candidate with no usable score cannot win. If none has one the metric is
+    misspelled or every evaluation failed, and either way returning whichever came
+    first in the list would be a decision nobody made.
+    """
     if not resultados:
         raise ValueError("no hay candidatos que comparar")
-    return max(
-        resultados,
-        key=lambda r: (round(r.score(metric), 4), -(r.cv_std if r.cv_std == r.cv_std else 1.0)),
-    )
+    comparables = [r for r in resultados if r.score(metric) > float("-inf")]
+    if not comparables:
+        raise ValueError(
+            f"ningún candidato reporta {metric!r}: "
+            f"{sorted({m for r in resultados for m in r.metrics})}"
+        )
+
+    def _estabilidad(r: CandidateResult) -> float:
+        # An unknown spread must not beat a measured one when the scores tie.
+        return -1.0 if math.isnan(r.cv_std) else -r.cv_std
+
+    return max(comparables, key=lambda r: (round(r.score(metric), 4), _estabilidad(r)))
 
 
 def justification(champion: CandidateResult, resultados: list[CandidateResult], metric: str) -> str:

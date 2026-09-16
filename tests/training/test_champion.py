@@ -60,3 +60,38 @@ def test_the_table_reports_every_candidate_and_metric():
 
     assert list(tabla.index) == ["a", "b"]
     assert {"pr_auc", "gini", "cv_std", "fit_s", "predict_ms_1k"} <= set(tabla.columns)
+
+
+# --- a champion must be earned, never fall out of list order -------------------
+
+
+def test_a_candidate_whose_evaluation_failed_never_wins():
+    """NaN loses every comparison, so max() was silently keeping the first element."""
+    fallido = CandidateResult(name="crashed", metrics={"pr_auc": float("nan")}, cv_std=float("nan"))
+    bueno = _c("good", 0.05, 0.10)
+
+    assert select_champion([fallido, bueno], "pr_auc").name == "good"
+    assert select_champion([bueno, fallido], "pr_auc").name == "good"
+
+
+def test_selection_does_not_depend_on_the_order_of_the_candidates():
+    candidatos = [_c("a", 0.08, 0.40), _c("b", 0.12, 0.20), _c("c", 0.04, 0.30)]
+
+    assert select_champion(candidatos, "pr_auc").name == "b"
+    assert select_champion(list(reversed(candidatos)), "pr_auc").name == "b"
+
+
+def test_a_metric_no_candidate_reports_is_an_error_not_a_coin_toss():
+    """A typo in primary_metric scored every candidate -inf and crowned the first one."""
+    with pytest.raises(ValueError, match="pr_au"):
+        select_champion([_c("a", 0.08, 0.40), _c("b", 0.12, 0.20)], "pr_au")
+
+
+def test_every_candidate_failing_is_an_error(  ):
+    fallidos = [
+        CandidateResult(name="a", metrics={"pr_auc": float("nan")}),
+        CandidateResult(name="b", metrics={"pr_auc": float("nan")}),
+    ]
+
+    with pytest.raises(ValueError, match="pr_auc"):
+        select_champion(fallidos, "pr_auc")

@@ -86,6 +86,18 @@ class Selection(BaseModel):
         return self
 
     @model_validator(mode="after")
+    def _metric_names_exist(self):
+        """A typo here would score every candidate -inf and crown whichever came first."""
+        from src.models.metrics import METRICAS
+
+        desconocidas = [m for m in self.report_metrics if m not in METRICAS]
+        if desconocidas:
+            raise ValueError(
+                f"selection.report_metrics no reconoce {desconocidas}; disponibles {list(METRICAS)}"
+            )
+        return self
+
+    @model_validator(mode="after")
     def _primary_is_reported(self):
         if self.primary_metric not in self.report_metrics:
             raise ValueError(
