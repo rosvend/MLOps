@@ -174,6 +174,46 @@ Every rule earns its place — removing any one of them costs Gini:
 | `missing_bureau_income` | 0.3463 | −0.0061 |
 | `young_independent` | 0.3466 | −0.0058 |
 
+## As a scikit-learn estimator
+
+`src/models/estimator.py` wraps the rules so the scorecard is trained, scored and compared
+with the same calls as any other model:
+
+```python
+pipe = Pipeline([("prep", CreditPreparer()), ("clf", HeuristicScorecard())])
+pipe.fit(X_train, y_train)          # fits the calibration only
+pipe.decision_function(X)           # raw integer score, frozen rules
+pipe.predict_proba(X)[:, 1]         # calibrated probability of default
+cross_val_score(pipe, X, y, cv=5, scoring="roc_auc")
+```
+
+`y` is the default indicator: `True` means the loan defaulted.
+
+**Only the calibration is learned.** `decision_function` needs no `fit` — the rules are frozen
+constants, so a score is a pure function of one application. `fit` learns a single isotonic map
+from score to probability of default, on the training fold alone, and `predict_proba` raises
+`NotFittedError` rather than ever falling back to an uncalibrated transform. The raw points are
+not a probability and are never rescaled into one.
+
+`score()` is overridden to return AUC rather than the accuracy `ClassifierMixin` would give:
+at a 4.75 % base rate a model that never flags anyone scores 95.25 % accuracy, so the inherited
+metric would rank this scorecard below doing nothing.
+
+### Out-of-fold results
+
+5-fold stratified cross-validation over all 10 763 loans:
+
+| Metric | Out-of-fold | In-sample |
+| --- | ---: | ---: |
+| AUC | 0.676 | 0.676 |
+| **Gini** | **0.352** | 0.352 |
+
+They match, which is what frozen rules should do — nothing is fitted to the scored rows, so the
+calibration adds no optimism. **This does not retire the in-sample caveat below.** The band
+cut-points and the weights were chosen by reading this same dataset before the code existed;
+cross-validation cannot detect that, because the choice happened outside the estimator. Only an
+out-of-time split, or a fresh vintage, can.
+
 ## Limitations
 
 - **In-sample.** Bands and points were measured on the same 10 763 loans they are scored against,
