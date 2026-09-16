@@ -259,3 +259,19 @@ def test_the_column_lists_come_from_config(real):
 
     assert fe.heavy_tailed_ == list(default_spec().engineering.heavy_tailed)
     assert fe.log_scale_ == list(default_spec().engineering.log_scale)
+
+
+@pytest.mark.parametrize("dtype", ["category", "string", "object"])
+def test_categoricals_are_found_by_the_spec_not_by_dtype(real, dtype):
+    """Feast hands back strings, the in-memory path hands back categories: both must work."""
+    from src.features.spec import default_spec
+
+    X, _ = real
+    categoricas = default_spec().columns.categoricas
+    convertido = X.assign(**{c: X[c].astype(dtype) for c in categoricas})
+
+    salida = FeatureEngineer().fit_transform(convertido)
+
+    for columna in categoricas:
+        assert any(c.startswith(f"{columna}_") for c in salida.columns), columna
+    assert not salida.isna().any().any()

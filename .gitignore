@@ -236,3 +236,9 @@ multirun/
 
 # Feast registry is a build artifact: feast apply regenerates it
 feature_repo/data/
+
+# MLflow tracking store, artifacts and training reports
+mlflow.db
+mlartifacts/
+mlruns/
+reports/

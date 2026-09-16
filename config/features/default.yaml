@@ -36,6 +36,9 @@ units:
   thousands: [saldo_mora, saldo_total, saldo_principal]
 
 columns:
+  # Which columns are categorical is a fact about the data, not about the dtype a given
+  # reader happens to produce: Feast returns strings, the in-memory path returns categories.
+  categoricas: [tipo_credito, tipo_laboral, tendencia_ingresos, rango_edad]
   sin_varianza: [saldo_mora_codeudor]
   enteros:
     - edad_cliente

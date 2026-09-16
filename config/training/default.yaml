@@ -1,0 +1,76 @@
+# Model training, tuning and champion selection. Nothing tunable lives in Python.
+
+experiment: credito-scoring
+# MLflow 3 retired the filesystem backend; sqlite is its local database option.
+tracking_uri: sqlite:///mlflow.db
+artifact_location: mlartifacts
+seed: 0
+n_trials: 25
+cv_folds: 5
+
+split:
+  # Oldest vintages train, newest are held out and read once, after all tuning. Shuffled
+  # folds would let a model see loans from the months it is scoring; this book spans 18.
+  by: mes_prestamo
+  train_fraction: 0.75
+
+selection:
+  # PR-AUC leads: at a 4.75 % default rate the negatives dominate ROC, so average precision
+  # is what the review queue actually experiences. Gini is reported for continuity.
+  primary_metric: pr_auc
+  report_metrics: [pr_auc, roc_auc, gini, f1, precision, recall, brier]
+  cv_scoring: average_precision
+  # Thresholded metrics are taken at the operating point the business actually uses -
+  # the share of applications sent to manual review - so F1/precision/recall compare
+  # like for like across a probability model and a ranking one. 0.5 would be arbitrary.
+  flagged_share: 0.157
+
+candidates:
+
+  logistic:
+    estimator: sklearn.linear_model.LogisticRegression
+    scale: true            # the only candidate that wants standardisation
+    fixed:
+      max_iter: 2000
+      solver: lbfgs
+    search:
+      C: {type: float, low: 0.001, high: 100.0, log: true}
+      class_weight: {type: categorical, choices: [balanced, null]}
+
+  xgboost:
+    estimator: xgboost.XGBClassifier
+    scale: false
+    fixed:
+      tree_method: hist
+      eval_metric: aucpr
+      n_jobs: 4
+    search:
+      n_estimators: {type: int, low: 100, high: 600, step: 50}
+      max_depth: {type: int, low: 2, high: 7}
+      learning_rate: {type: float, low: 0.01, high: 0.3, log: true}
+      subsample: {type: float, low: 0.6, high: 1.0}
+      colsample_bytree: {type: float, low: 0.6, high: 1.0}
+      min_child_weight: {type: float, low: 1.0, high: 20.0, log: true}
+      reg_lambda: {type: float, low: 0.1, high: 20.0, log: true}
+      scale_pos_weight: {type: float, low: 1.0, high: 30.0, log: true}
+
+  lightgbm:
+    estimator: lightgbm.LGBMClassifier
+    scale: false
+    fixed:
+      objective: binary
+      n_jobs: 4
+      verbose: -1
+    search:
+      n_estimators: {type: int, low: 100, high: 600, step: 50}
+      num_leaves: {type: int, low: 7, high: 63}
+      learning_rate: {type: float, low: 0.01, high: 0.3, log: true}
+      min_child_samples: {type: int, low: 10, high: 200}
+      subsample: {type: float, low: 0.6, high: 1.0}
+      colsample_bytree: {type: float, low: 0.6, high: 1.0}
+      reg_lambda: {type: float, low: 0.1, high: 20.0, log: true}
+      scale_pos_weight: {type: float, low: 1.0, high: 30.0, log: true}
+
+# The incumbent. Frozen rules, nothing to tune, entered so the selection can keep it.
+baseline:
+  estimator: src.models.estimator.HeuristicModel

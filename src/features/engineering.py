@@ -36,13 +36,14 @@ class FeatureEngineer(TransformerMixin, BaseEstimator):
             return self.winsor_quantile
         return self._spec().engineering.winsor_quantile
 
-    @staticmethod
-    def _numericas(X: pd.DataFrame) -> list[str]:
-        return [c for c in X.columns if str(X[c].dtype) != "category"]
+    def _categoricas(self, X: pd.DataFrame) -> list[str]:
+        """From the spec, not from the dtype: Feast returns strings where pandas returns
+        categories, and the same column must be encoded either way."""
+        return [c for c in self._spec().columns.categoricas if c in X.columns]
 
-    @staticmethod
-    def _categoricas(X: pd.DataFrame) -> list[str]:
-        return [c for c in X.columns if str(X[c].dtype) == "category"]
+    def _numericas(self, X: pd.DataFrame) -> list[str]:
+        categoricas = set(self._categoricas(X))
+        return [c for c in X.columns if c not in categoricas]
 
     @staticmethod
     def _rechazar_columnas_opacas(X: pd.DataFrame) -> None:
@@ -107,8 +108,12 @@ class FeatureEngineer(TransformerMixin, BaseEstimator):
         for columna in self.log_scale_:
             if columna in numerico:
                 numerico[columna] = np.log1p(numerico[columna].clip(lower=0))
+        # Fixed vocabularies from the spec, so a batch missing a level still emits its column.
+        categoricas = self._categoricas(X)
+        if not categoricas:
+            return numerico
         codificado = pd.get_dummies(
-            X[self._categoricas(X)], prefix_sep="_", dummy_na=False, dtype="float64"
+            X[categoricas].astype("object"), prefix_sep="_", dummy_na=False, dtype="float64"
         )
         return pd.concat([numerico, codificado.set_index(numerico.index)], axis=1)
 

@@ -88,6 +88,7 @@ class Units(BaseModel):
 class Columns(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    categoricas: list[str]
     sin_varianza: list[str]
     enteros: list[str]
     vigiladas: list[str]

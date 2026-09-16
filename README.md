@@ -58,6 +58,10 @@ produced it under `outputs/`.
 `make feast-verify` proves the point-in-time join holds — zero features returned before a
 loan was originated. Details in [`docs/feature-store.md`](docs/feature-store.md).
 
+`make train` tunes logistic regression, XGBoost and LightGBM with Optuna, tracks every run
+in MLflow and picks a champion on a held-out window of the newest vintages. Details and the
+results table in [`docs/model-training.md`](docs/model-training.md).
+
 ## Swapping the data source
 
 `src/pipelines/prepare.py` is the single seam the rest of the pipeline attaches to. It takes any
