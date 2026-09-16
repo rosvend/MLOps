@@ -1,0 +1,72 @@
+"""End to end: raw CSV in, a Feast-ready feature table out."""
+
+import pandas as pd
+import pytest
+
+from src.features.spec import default_spec
+from src.pipelines.features import build_feature_table, materialise
+
+
+@pytest.fixture
+def spec():
+    return default_spec()
+
+
+@pytest.fixture
+def tabla(sample_source, spec):
+    return build_feature_table(sample_source, spec)
+
+
+def test_one_row_per_loan(tabla, raw):
+    assert len(tabla) == len(raw)
+
+
+def test_it_is_keyed_by_the_entity_and_the_event_timestamp(tabla, spec):
+    assert list(tabla.columns[:2]) == [spec.entity_key, spec.event_timestamp]
+    assert tabla[spec.entity_key].is_unique
+    assert tabla[spec.entity_key].notna().all()
+    assert pd.api.types.is_datetime64_any_dtype(tabla[spec.event_timestamp])
+
+
+def test_the_target_never_reaches_the_feature_store(tabla, spec):
+    assert spec.target not in tabla.columns
+
+
+@pytest.mark.parametrize("columna", ["puntaje", "mes_prestamo"])
+def test_withheld_columns_never_reach_the_feature_store(tabla, columna):
+    assert columna not in tabla.columns
+
+
+def test_it_carries_the_engineered_inputs_a_model_needs(tabla):
+    for columna in ("dti", "pti", "tiene_mora_bureau", "rango_edad", "falta_salario_cliente"):
+        assert columna in tabla.columns
+
+
+def test_the_table_holds_only_row_independent_values(sample_source, spec, raw):
+    """No fitted statistic is materialised, so a subset gives identical values."""
+
+    class Mem:
+        def __init__(self, frame):
+            self._frame = frame
+
+        def read(self):
+            return self._frame.copy()
+
+    completo = build_feature_table(sample_source, spec)
+    parcial = build_feature_table(Mem(raw.head(5)), spec)
+
+    compartidas = [c for c in parcial.columns if c != spec.entity_key]
+    assert parcial[compartidas].reset_index(drop=True).equals(
+        completo.head(5)[compartidas].reset_index(drop=True)
+    )
+
+
+def test_materialise_writes_a_readable_parquet(sample_source, spec, tmp_path):
+    destino = tmp_path / "features.parquet"
+
+    escrito = materialise(sample_source, spec, destino)
+
+    recargado = pd.read_parquet(destino)
+    assert len(recargado) == len(escrito)
+    assert list(recargado.columns) == list(escrito.columns)
+    assert recargado[spec.entity_key].is_unique

@@ -4,9 +4,9 @@ Everything before this point is a pure function of one row. These are not: a p99
 and a median are statistics of a sample. They are therefore fitted on the training
 rows and applied to the test rows, which is what keeps the split honest.
 
-Which columns get which treatment is a frozen list rather than a rule evaluated at
-fit time - selecting by measured skew would let the output schema differ between
-folds. The measurements behind the lists are in docs/feature-engineering.md.
+Which columns get which treatment comes from config/features/default.yaml, as a frozen
+list rather than a rule evaluated at fit time - selecting by measured skew would let the
+output schema differ between folds. The measurements are in docs/feature-engineering.md.
 """
 
 import numpy as np
@@ -14,48 +14,7 @@ import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.utils.validation import check_is_fitted, validate_data
 
-# Long right tails: clipped at the training p99 so one outlier cannot dominate a fit.
-COLAS_PESADAS = [
-    "capital_prestado",
-    "cuota_pactada",
-    "total_otros_prestamos",
-    "salario_cliente",
-    "promedio_ingresos_datacredito",
-    "saldo_total",
-    "saldo_principal",
-    "saldo_mora",
-    "dti",
-    "pti",
-    "monto_sobre_ingreso",
-    "ratio_ingreso_declarado_bureau",
-    "creditos_por_anio_adulto",
-    "cant_creditosvigentes",
-    "huella_consulta",
-    "creditos_sectorFinanciero",
-    "creditos_sectorCooperativo",
-    "creditos_sectorReal",
-]
-
-# Money and ratios span orders of magnitude; log1p makes them comparable. Applied
-# after clipping, and only to quantities that cannot be negative.
-ESCALA_LOGARITMICA = [
-    "capital_prestado",
-    "cuota_pactada",
-    "total_otros_prestamos",
-    "salario_cliente",
-    "promedio_ingresos_datacredito",
-    "saldo_total",
-    "saldo_principal",
-    "saldo_mora",
-    "dti",
-    "pti",
-    "monto_sobre_ingreso",
-    "ratio_ingreso_declarado_bureau",
-    "creditos_por_anio_adulto",
-]
-
-WINSOR_QUANTILE = 0.99
-
+from src.features.spec import FeatureSpec, default_spec
 
 class FeatureEngineer(TransformerMixin, BaseEstimator):
     """Winsorise, log-compress, impute and encode. Every statistic comes from `fit`.
@@ -65,8 +24,17 @@ class FeatureEngineer(TransformerMixin, BaseEstimator):
     space drifting between training and serving.
     """
 
-    def __init__(self, *, winsor_quantile: float = WINSOR_QUANTILE):
+    def __init__(self, *, spec: FeatureSpec | None = None, winsor_quantile: float | None = None):
+        self.spec = spec
         self.winsor_quantile = winsor_quantile
+
+    def _spec(self) -> FeatureSpec:
+        return self.spec or default_spec()
+
+    def _quantile(self) -> float:
+        if self.winsor_quantile is not None:
+            return self.winsor_quantile
+        return self._spec().engineering.winsor_quantile
 
     @staticmethod
     def _numericas(X: pd.DataFrame) -> list[str]:
@@ -84,10 +52,13 @@ class FeatureEngineer(TransformerMixin, BaseEstimator):
 
     def fit(self, X: pd.DataFrame, y=None) -> "FeatureEngineer":
         validate_data(self, X=X, skip_check_array=True, reset=True)
+        spec = self._spec()
+        self.heavy_tailed_ = list(spec.engineering.heavy_tailed)
+        self.log_scale_ = list(spec.engineering.log_scale)
         numerico = self._numerico(X)
         self.caps_ = {
-            c: float(numerico[c].quantile(self.winsor_quantile))
-            for c in COLAS_PESADAS
+            c: float(numerico[c].quantile(self._quantile()))
+            for c in self.heavy_tailed_
             if c in numerico and numerico[c].notna().any()
         }
         self.medianas_ = {
@@ -107,7 +78,7 @@ class FeatureEngineer(TransformerMixin, BaseEstimator):
                 # Impute before the log, so the filled value is on the same scale as the
                 # median it came from. Safe only because falta_<columna> keeps the fact.
                 numerico[columna] = numerico[columna].fillna(mediana)
-        for columna in ESCALA_LOGARITMICA:
+        for columna in self.log_scale_:
             if columna in numerico:
                 numerico[columna] = np.log1p(numerico[columna].clip(lower=0))
         codificado = pd.get_dummies(

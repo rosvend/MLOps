@@ -82,9 +82,9 @@ def test_a_single_class_batch_says_why_the_metrics_are_missing(caplog):
 
 
 def test_the_scorecard_never_needs_a_withheld_column():
-    from src.features.contract import PROHIBIDAS, TARGET
+    from src.features.spec import default_spec
 
-    assert not REQUIRED_COLUMNS & (PROHIBIDAS | {TARGET})
+    assert not REQUIRED_COLUMNS & (default_spec().no_son_features | {default_spec().target})
 
 
 def test_scoring_is_identical_on_the_leakage_safe_view(prepared, sample_source):

@@ -26,7 +26,7 @@ def test_config_loads_inside_an_existing_hydra_session():
 
 
 def test_hydras_own_keys_do_not_leak_into_the_typed_config():
-    assert set(Config.model_fields) == {"data_source", "model"}
+    assert set(Config.model_fields) == {"data_source", "features", "model"}
 
 
 def test_an_unknown_top_level_key_is_rejected():

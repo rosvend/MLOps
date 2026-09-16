@@ -1,29 +1,28 @@
 """Which prepared columns a model is allowed to see.
 
-Keeping this as a list rather than a convention means adding a leaky feature is a
-deliberate edit to a reviewed file, not an accident in a notebook.
-
-saldo_mora and tiene_mora_bureau were withheld while it was unconfirmed whether the
-bureau balance is observed at origination. The business confirmed an origination-time
-pull on 2026-09-16, so they are features now.
+Four roles are reserved and never reach a model: the entity key (a join key, not a
+signal), the event timestamp (the vintage itself), the target, and the withheld list.
+Everything else is a feature. The roles live in config/features/default.yaml, so adding
+a leaky column is a deliberate edit to a reviewed file rather than an accident.
 """
 
 import pandas as pd
 
-TARGET = "Pago_atiempo"
-
-PROHIBIDAS = frozenset(
-    {
-        "puntaje",  # leakage: 87% share the maximum value and none of them defaulted
-        "mes_prestamo",  # vintage censoring control, not a predictor
-    }
-)
+from src.features.spec import FeatureSpec, default_spec
 
 
-def feature_names(columns: pd.Index | list[str]) -> list[str]:
-    return [c for c in columns if c != TARGET and c not in PROHIBIDAS]
+def feature_names(columns: pd.Index | list[str], spec: FeatureSpec | None = None) -> list[str]:
+    spec = spec or default_spec()
+    reservadas = spec.no_son_features
+    return [c for c in columns if c not in reservadas]
 
 
-def features(df: pd.DataFrame) -> pd.DataFrame:
+def features(df: pd.DataFrame, spec: FeatureSpec | None = None) -> pd.DataFrame:
     """The only view a model should ever be fitted or scored on."""
-    return df[feature_names(df.columns)].copy()
+    return df[feature_names(df.columns, spec)].copy()
+
+
+def entity_frame(df: pd.DataFrame, spec: FeatureSpec | None = None) -> pd.DataFrame:
+    """Join key and event timestamp: what a feature store needs for point-in-time joins."""
+    spec = spec or default_spec()
+    return df[[spec.entity_key, spec.event_timestamp]].copy()

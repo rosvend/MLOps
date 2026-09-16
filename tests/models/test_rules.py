@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from src.features.derive import RANGO_EDAD_LABELS
+from src.features.spec import default_spec
 from src.models import rules
 
 
@@ -48,7 +48,7 @@ def test_inquiry_bands_split_at_three_and_six(neutral_record):
 def test_the_youngest_band_is_the_most_expensive(neutral_record):
     youngest = rules.age_band(neutral_record(rango_edad="18-25"))
 
-    assert youngest == max(rules.age_band(neutral_record(rango_edad=b)) for b in RANGO_EDAD_LABELS)
+    assert youngest == max(rules.age_band(neutral_record(rango_edad=b)) for b in default_spec().age_bands.labels)
 
 
 def test_age_points_decline_across_the_first_four_bands(neutral_record):
@@ -113,7 +113,7 @@ def test_a_missing_bureau_income_block_costs_points(neutral_record):
 
 def test_every_age_band_the_pipeline_can_produce_has_a_weight(neutral_record):
     """The band labels and the points table must not drift apart."""
-    for banda in RANGO_EDAD_LABELS:
+    for banda in default_spec().age_bands.labels:
         assert isinstance(rules.age_band(neutral_record(rango_edad=banda)), int)
 
 

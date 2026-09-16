@@ -11,6 +11,7 @@ from hydra.core.global_hydra import GlobalHydra
 from omegaconf import OmegaConf
 from pydantic import BaseModel, ConfigDict
 
+from src.features.spec import FeatureSpec
 from src.models.scorecard import Scorecard
 
 CONFIG_DIR = Path(__file__).resolve().parents[1] / "config"
@@ -33,6 +34,7 @@ class Config(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     data_source: DataSourceConfig
+    features: FeatureSpec
     model: Scorecard
 
 

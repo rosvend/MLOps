@@ -5,7 +5,7 @@ from src.data.factory import build_source
 from src.data.schema import CreditoFeaturesSchema, CreditoLabelledSchema
 from src.data.source import DataSource
 from src.features.cleaning import clean
-from src.features.contract import TARGET
+from src.features.spec import default_spec
 from src.features.derive import add_derived_features
 
 
@@ -16,7 +16,7 @@ def prepare_features_frame(df: pd.DataFrame) -> pd.DataFrame:
     drift into accepting different data.
     """
     derivado = add_derived_features(clean(df))
-    return CreditoFeaturesSchema.validate(derivado.drop(columns=[TARGET], errors="ignore"))
+    return CreditoFeaturesSchema.validate(derivado.drop(columns=[default_spec().target], errors="ignore"))
 
 
 def prepare_features(source: DataSource) -> pd.DataFrame:

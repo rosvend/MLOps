@@ -7,9 +7,11 @@ are in thousands of COP, and a derived flag must distinguish "no" from "unknown"
 import pandas as pd
 import pytest
 
-from src.features.cleaning import MILES, SALDOS_EN_MILES, clean
-from src.features.contract import PROHIBIDAS
-from src.features.derive import COLUMNAS_VIGILADAS, add_derived_features
+from src.features.cleaning import clean
+from src.features.spec import default_spec
+from src.features.spec import default_spec
+from src.features.derive import add_derived_features
+from src.features.spec import default_spec
 from src.pipelines.prepare import prepare_labelled
 
 
@@ -24,22 +26,22 @@ def prepared(sample_source):
 @pytest.mark.parametrize("columna", ["saldo_mora", "tiene_mora_bureau"])
 def test_the_bureau_arrears_columns_are_no_longer_withheld(columna):
     """Confirmed observed at origination, so they are features, not leakage."""
-    assert columna not in PROHIBIDAS
+    assert columna not in default_spec().no_son_features
 
 
 @pytest.mark.parametrize("columna", ["puntaje", "mes_prestamo"])
 def test_the_genuinely_leaky_columns_are_still_withheld(columna):
-    assert columna in PROHIBIDAS
+    assert columna in default_spec().no_son_features
 
 
 # --- bureau balances are thousands of COP ------------------------------------
 
 
-@pytest.mark.parametrize("columna", SALDOS_EN_MILES)
+@pytest.mark.parametrize("columna", default_spec().units.thousands)
 def test_bureau_balances_are_stored_in_pesos(raw, columna):
     cleaned = clean(raw)
 
-    esperado = raw[columna].dropna() * MILES
+    esperado = raw[columna].dropna() * default_spec().units.factor
     assert cleaned.loc[esperado.index, columna].tolist() == esperado.astype("Int64").tolist()
 
 
@@ -80,7 +82,7 @@ def test_missing_arrears_do_not_read_as_confirmed_no_arrears(raw):
     assert derivado["tiene_mora_bureau"].isna().all()
 
 
-@pytest.mark.parametrize("columna", COLUMNAS_VIGILADAS)
+@pytest.mark.parametrize("columna", default_spec().columns.vigiladas)
 def test_every_watched_column_gets_a_missingness_indicator(prepared, columna):
     indicador = f"falta_{columna}"
 

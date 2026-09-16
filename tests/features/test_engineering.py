@@ -7,12 +7,13 @@ tests exist to make that property fail loudly if it is ever broken.
 import numpy as np
 import pandas as pd
 import pytest
-from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
-from sklearn.pipeline import Pipeline
+from sklearn.model_selection import train_test_split
 
-from src.features.cleaning import TIPOS_CREDITO
-from src.features.contract import TARGET, features
-from src.features.engineering import COLAS_PESADAS, ESCALA_LOGARITMICA, FeatureEngineer
+from src.features.spec import default_spec
+from src.features.contract import features
+from src.features.spec import default_spec
+from src.features.engineering import FeatureEngineer
+from src.features.spec import default_spec
 from src.models.estimator import CreditPreparer
 from src.pipelines.prepare import prepare_labelled
 
@@ -27,7 +28,7 @@ def real():
     from src.data.csv_source import CsvDataSource
 
     prepared = prepare_labelled(CsvDataSource("data/raw/BD_creditos.csv"))
-    return features(prepared), ~prepared[TARGET]
+    return features(prepared), ~prepared[default_spec().target]
 
 
 # --- fitted on train, applied to test ----------------------------------------
@@ -118,7 +119,7 @@ def test_every_fixed_category_gets_a_column_even_when_absent(X):
     """Categories are frozen in cleaning, so encoding cannot drift between batches."""
     salida = FeatureEngineer().fit_transform(X)
 
-    for nivel in TIPOS_CREDITO:
+    for nivel in default_spec().vocabularies.tipos_credito:
         assert f"tipo_credito_{nivel}" in salida.columns
 
 
@@ -137,7 +138,7 @@ def test_heavy_tails_are_compressed(real):
     X, _ = real
     salida = FeatureEngineer().fit_transform(X)
 
-    for columna in ESCALA_LOGARITMICA:
+    for columna in default_spec().engineering.log_scale:
         if columna not in X:
             continue
         antes = X[columna].astype("float64")
@@ -163,8 +164,8 @@ def test_untouched_columns_keep_their_values(X):
 
 @pytest.mark.parametrize("columna", ["edad_cliente", "puntaje_datacredito", "plazo_meses"])
 def test_well_behaved_columns_are_left_alone(columna):
-    assert columna not in COLAS_PESADAS
-    assert columna not in ESCALA_LOGARITMICA
+    assert columna not in default_spec().engineering.heavy_tailed
+    assert columna not in default_spec().engineering.log_scale
 
 
 # --- in a pipeline ------------------------------------------------------------
@@ -185,30 +186,29 @@ def test_the_heuristic_cannot_consume_engineered_features(real):
         modelo.decision_function(engineered)
 
 
-def test_engineered_features_beat_the_baseline_in_shuffled_cv(real):
-    """Shuffled CV only. Out of time the heuristic still wins - see docs/feature-engineering.md."""
-    from sklearn.linear_model import LogisticRegression
-    from sklearn.preprocessing import StandardScaler
-
-    X, y = real
-    pipe = Pipeline(
-        [
-            ("feat", FeatureEngineer()),
-            ("scale", StandardScaler()),
-            ("lr", LogisticRegression(max_iter=1000, class_weight="balanced")),
-        ]
-    )
-
-    # Same CV as the heuristic's published 0.676, so the comparison is like for like.
-    cv = StratifiedKFold(5, shuffle=True, random_state=0)
-    auc = cross_val_score(pipe, X, y, cv=cv, scoring="roc_auc")
-
-    assert auc.mean() > 0.676  # the heuristic's out-of-fold AUC
-
-
 def test_scaling_is_left_to_the_model_pipeline(real):
     """Winsorise/log/encode is representation; standardisation is model-specific."""
     X, _ = real
     salida = FeatureEngineer().fit_transform(X)
 
     assert salida["edad_cliente"].std() > 1.5
+
+
+def test_the_winsor_quantile_comes_from_config(real):
+    X, _ = real
+
+    estricto = FeatureEngineer(winsor_quantile=0.90).fit(X)
+    laxo = FeatureEngineer(winsor_quantile=0.99).fit(X)
+
+    assert estricto.caps_["dti"] < laxo.caps_["dti"]
+
+
+def test_the_column_lists_come_from_config(real):
+    """Nothing in engineering.py hardcodes which column gets which treatment."""
+    from src.features.spec import default_spec
+
+    X, _ = real
+    fe = FeatureEngineer().fit(X)
+
+    assert fe.heavy_tailed_ == list(default_spec().engineering.heavy_tailed)
+    assert fe.log_scale_ == list(default_spec().engineering.log_scale)

@@ -8,7 +8,7 @@ from sklearn.exceptions import NotFittedError
 from sklearn.model_selection import cross_val_score, train_test_split
 from sklearn.pipeline import Pipeline
 
-from src.features.contract import TARGET
+from src.features.spec import default_spec
 from src.models.estimator import (
     CreditPreparer,
     HeuristicModel,
@@ -21,12 +21,12 @@ from src.pipelines.prepare import prepare_labelled
 @pytest.fixture
 def datos(sample_source):
     prepared = prepare_labelled(sample_source)
-    return prepared, ~prepared[TARGET]
+    return prepared, ~prepared[default_spec().target]
 
 
 @pytest.fixture
 def crudo(raw):
-    return raw, ~raw[TARGET].astype(bool)
+    return raw, ~raw[default_spec().target].astype(bool)
 
 
 # --- sklearn API conformance -------------------------------------------------
@@ -205,7 +205,7 @@ def test_the_preparer_never_hands_the_target_to_the_model(crudo):
 
     transformado = CreditPreparer().fit_transform(X)
 
-    assert TARGET not in transformado.columns
+    assert default_spec().target not in transformado.columns
 
 
 def test_the_preparer_is_stateless(crudo):

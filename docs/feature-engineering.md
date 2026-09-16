@@ -1,85 +1,93 @@
 # Feature engineering (stage 5)
 
-`src/features/engineering.py`. Everything before this stage is a pure function of one row.
-These transforms are not: a p99 cap and a median are statistics of a sample, so they are
-fitted on the training rows and applied to the test rows.
+Everything the pipeline does is declared in `config/features/default.yaml` and validated by
+`FeatureSpec` in `src/features/spec.py`. No column list, bound, vocabulary or threshold is a
+Python literal, so a run records the exact spec that produced it and an experiment can vary it
+with a Hydra override rather than a code change.
 
-## What gets done, and why
+## Column roles
 
-Measured on all 10 763 loans. Only columns with a genuine tail are touched:
+Four roles are reserved and never reach a model. Everything else is a feature.
 
-| Column | skew | max / p99 | treatment |
-| --- | ---: | ---: | --- |
-| `dti` | 97.5 | 1739× | winsorise p99, log1p |
-| `pti` | 96.7 | 363× | winsorise p99, log1p |
-| `monto_sobre_ingreso` | 95.3 | 248× | winsorise p99, log1p |
-| `saldo_mora` | 40.6 | — | winsorise p99, log1p |
-| `total_otros_prestamos` | 38.5 | 378× | winsorise p99, log1p |
-| `saldo_total` | 20.2 | 14× | winsorise p99, log1p |
-| `ratio_ingreso_declarado_bureau` | 19.6 | 11× | winsorise p99, log1p |
-| `salario_cliente` | 19.5 | 29× | winsorise p99, log1p |
-| `edad_cliente` | 0.27 | 1.0× | left alone |
-| `puntaje_datacredito` | −0.71 | 1.1× | left alone |
+| Role | Column | Why it is not a feature |
+| --- | --- | --- |
+| Entity key | `cliente_id` | A join key. Surrogate (`CLI-0000001`…) until the business exports the real client ID. |
+| Event timestamp | `fecha_prestamo` | It *is* the vintage. Feast needs it for point-in-time joins; a model must not read it. |
+| Target | `Pago_atiempo` | — |
+| Withheld | `puntaje` | Leakage: 87 % share the maximum value and none of them defaulted. |
+| Withheld | `mes_prestamo` | Censoring control derived from the event timestamp. |
 
-The ratio columns are the reason this stage exists: a `dti` whose largest value sits 1739×
-above the 99th percentile will dominate any fit that is not protected from it.
+`fecha_prestamo` was previously *not* reserved, so it reached the model view and the fitted
+transforms coerced it to a number — 1.7362608e+18 nanoseconds, correlating **1.0000** with the
+loan date. That is the vintage leak `mes_prestamo` was withheld to prevent, arriving through the
+back door. The highest correlation between any engineered column and the loan date is now 0.12.
 
-Which column gets which treatment is a **frozen list**, not a rule evaluated at fit time.
-Selecting by measured skew would let the output schema differ between folds.
+## Two layers, and why they are separate
 
-## Order of operations
+**Row-independent** (`clean` → `derive` → `contract`). Sentinel nulling, unit scaling, ratios,
+bands and missingness indicators. A loan produces identical values alone or inside a portfolio.
+This is what `make features` materialises.
 
-1. **Winsorise** at the training p99.
-2. **Impute** with the training median — before the log, so the filled value is on the same
-   scale as the median it came from.
-3. **log1p** the monetary and ratio columns.
-4. **One-hot encode** the categoricals.
+**Fitted** (`src/features/engineering.py`). A p99 cap and a median are statistics of a sample,
+so they are fitted on the training rows and applied to the test rows.
 
-Imputation is only safe because `falta_<column>` still records that the value was missing;
-all eight indicators carry signal, lifting the default rate 1.18× to 1.54×.
+The split is the important design decision here:
 
-Encoding needs **no fitted state**. `clean()` freezes the category sets, so a batch that
-happens to contain no `tipo_credito == "Otro"` still emits that column. That is what stops the
-feature space drifting between training and serving.
+> The feature store holds only the row-independent layer. Materialising winsorised or imputed
+> values would bake statistics taken over the whole book into the store, and every future
+> train/test split would silently inherit them. The fitted transforms stay inside the model
+> pipeline, refitted on each training split.
 
-Standardisation is deliberately **not** here. Winsorise/log/encode is representation; scaling
-is model-specific and belongs in the model's own pipeline — a gradient booster does not want it.
+## What the fitted layer does
 
-36 contract columns become 47 engineered ones.
+Order matters: **winsorise → impute → log1p**. Imputing before the log keeps the filled value on
+the same scale as the median it came from; doing it after put raw pesos (2 900 000) next to log
+values (~15) in the same column.
 
-## Results
+Only columns with a real tail are touched. `edad_cliente` (skew 0.27) and `puntaje_datacredito`
+(−0.71) are left alone.
 
-5-fold stratified CV, shuffled, seed 0 — the same split the heuristic's published 0.676 uses:
-
-| Model | AUC | Gini |
+| Column | skew before | skew after |
 | --- | ---: | ---: |
-| Heuristic scorecard (baseline) | 0.6760 | 0.3520 |
-| **Logistic regression** on engineered features | **0.6895** | **0.3790** |
-| Gradient boosting on engineered features | 0.6541 | 0.3081 |
+| `dti` | 97.5 | 0.52 |
+| `pti` | 96.7 | 1.85 |
+| `monto_sobre_ingreso` | 95.3 | 0.87 |
+| `saldo_mora` | 40.6 | 0.00 |
+| `total_otros_prestamos` | 38.5 | −3.77 |
+| `saldo_total` | 20.2 | −2.47 |
+| `ratio_ingreso_declarado_bureau` | 19.6 | 2.66 |
+| `salario_cliente` | 19.5 | 0.42 |
 
-## The result that matters more
+The ratios are why this layer exists: `dti`'s largest value sat 1739× above its own 99th
+percentile, `pti`'s 363×, `monto_sobre_ingreso`'s 248×. A few columns overshoot into mild
+negative skew, which is the ordinary cost of a log on a zero-inflated column and far less
+damaging than the tail it removes.
 
-Train on the oldest 75 % of vintages, test on the newest 25 %:
+Imputation is only safe because `falta_<column>` still records the fact. All eight indicators
+carry signal, lifting the default rate 1.18× (`tendencia_ingresos`) to 1.54× (`edad_cliente`)
+over the 4.75 % base.
 
-| Model | AUC | Gini |
-| --- | ---: | ---: |
-| Logistic regression | 0.6216 | 0.2432 |
-| **Heuristic scorecard** | **0.6468** | **0.2937** |
+Encoding needs **no fitted state**: `clean()` freezes the category sets, so a batch containing no
+`tipo_credito == "Otro"` still emits that column. That is what stops the feature space drifting
+between training and serving.
 
-**Out of time, the heuristic still wins.** Shuffled CV says the learned model is ahead by
-0.027 Gini; an out-of-time split says it is behind by 0.050. Shuffled folds let a model see
-loans from the same months it is scoring, and the learned model uses that. The heuristic
-cannot, because its constants are frozen.
+Standardisation is deliberately absent. Winsorise/log/encode is representation; scaling is
+model-specific and belongs in the model's own pipeline.
 
-Two things follow:
+35 contract columns become 46 engineered ones, with no nulls remaining.
 
-- **Out-of-time is the split to report from here on.** Shuffled CV flatters any model fitted on
-  a book with vintage structure, and this book has it.
-- **Stage 5 does not yet clear the bar.** The transforms are correct and the leakage discipline
-  holds, but better inputs alone did not beat eight hand-written rules where it counts. The gap
-  is not in the features; it is that nothing has been done about vintage yet — the loan book
-  spans 15 months and recent vintages are censored, which `mes_prestamo` marks and no model
-  currently accounts for.
+## Running it
 
-Gradient boosting doing worse than logistic regression on 10 763 loans with 511 defaults is the
-ordinary result at this sample size, not a bug.
+```bash
+make features                                                   # -> data/processed/features.parquet
+uv run python -m src.pipelines.features features.engineering.winsor_quantile=0.95
+```
+
+The output is keyed by `cliente_id` with `fecha_prestamo` as the event timestamp: 10 763 loans ×
+37 columns, which is what stage 6 will register with Feast.
+
+## Known limitation
+
+One ID per row means there are no repeat borrowers to find. The surrogate key exists so stage 6
+can be built; borrower history — prior loans, prior defaults, time since last loan — has to wait
+for the real client identifier.
