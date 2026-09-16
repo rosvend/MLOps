@@ -4,4 +4,5 @@ defaults:
   - model: heuristic
   - training: default
   - serving: default
+  - monitoring: default
   - _self_

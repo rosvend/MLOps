@@ -1,0 +1,36 @@
+# Drift detection, alerting and request logging. Nothing tunable lives in Python.
+
+reference_path: models/reference_data.parquet
+predictions_db_path: data/monitoring/predictions.db
+
+# Overall dataset drift: fraction of features that must show significant drift before
+# the dataset itself is flagged. Matches the alerting spec's ">30% of features".
+drift_share_threshold: 0.30
+# Operational alert: share of scored applications sent to manual review. The champion's
+# own calibration targets 15.7%; this is the ceiling before it is worth a human looking.
+flagged_share_threshold: 0.25
+
+# Numeric columns below this many reference rows use KS (an exact p-value test, suited to
+# small samples); at or above it they use Wasserstein distance, which scales better on
+# large samples where KS becomes oversensitive to tiny, meaningless differences.
+numeric_sample_size_cutoff: 1000
+numeric_small_sample_stattest: ks
+numeric_large_sample_stattest: wasserstein
+categorical_stattest: chisquare
+# Significance level for the p-value tests (KS, chi-square). Wasserstein is a distance
+# test with its own scale-relative threshold, not a p-value - alpha does not apply to it.
+alpha: 0.05
+
+# A drift check on a handful of logged requests is noise, not a report.
+min_current_rows: 30
+
+# Alerts always log locally; also POSTed here if set. Sends both {"text": ...} and
+# {"content": ...} so the same body works for a Slack or a Discord incoming webhook -
+# unknown keys are ignored by both. No credentials exist in this environment, so this
+# is unset by default.
+webhook_url: null
+
+offline_report_html: reports/evidently_drift_report.html
+offline_report_json: reports/evidently_metrics.json
+live_report_html: data/monitoring/reports/live_drift_report.html
+live_report_json: data/monitoring/reports/live_drift_metrics.json
