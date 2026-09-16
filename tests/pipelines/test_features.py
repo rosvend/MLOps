@@ -109,6 +109,17 @@ def test_no_column_is_dictionary_encoded(sample_source, spec, tmp_path):
     assert dictionarys == []
 
 
+def test_the_feature_views_cover_the_table_exactly(tabla, spec):
+    """FeatureSpec cannot see the built table, so "none forgotten" is checked here.
+
+    Its own validator only rejects a column claimed twice or reserved. A column present
+    in the parquet but absent from every view would otherwise be lost with no error.
+    """
+    en_la_tabla = set(tabla.columns) - {spec.entity_key, spec.event_timestamp}
+
+    assert set(spec.feature_view_columns) == en_la_tabla
+
+
 def test_the_category_vocabulary_survives_as_strings(tabla, spec):
     """The vocabulary is enforced by the spec and the schema, not by parquet encoding."""
     valores = set(tabla["tipo_credito"].dropna())

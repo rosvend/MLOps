@@ -10,10 +10,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import pyarrow.parquet as pq  # noqa: E402
 from feast import FeatureView, FileSource, Field  # noqa: E402
-from feast.types import Bool, Float64, Int64, String, UnixTimestamp  # noqa: E402
 
+from src.features.feast_types import parquet_types  # noqa: E402
 from src.features.spec import default_spec  # noqa: E402
 
 from entities import cliente  # noqa: E402  (feast puts the repo dir on the path)
@@ -22,31 +21,9 @@ _RAIZ = Path(__file__).resolve().parents[1]
 _SPEC = default_spec()
 _PARQUET = _RAIZ / _SPEC.output_path
 
-# The one place pandas/Arrow types are translated into Feast's. A type outside this table
-# is a change worth noticing, so it raises rather than guessing.
-ARROW_A_FEAST = {
-    "int64": Int64,
-    "double": Float64,
-    "bool": Bool,
-    "string": String,
-    "large_string": String,
-}
-
-
-def feast_type(arrow: str):
-    """Any zone is accepted for the timestamp; everything else must be in the table."""
-    if arrow.startswith("timestamp["):
-        return UnixTimestamp
-    if arrow not in ARROW_A_FEAST:
-        raise TypeError(f"tipo Arrow sin equivalente en Feast: {arrow}")
-    return ARROW_A_FEAST[arrow]
-
-
-def _tipos() -> dict[str, object]:
-    return {campo.name: feast_type(str(campo.type)) for campo in pq.read_schema(_PARQUET)}
-
-
-_TIPOS = _tipos()
+# Read at import: every Feast entry point needs the table to exist, and parquet_types
+# says so by name rather than letting a bare FileNotFoundError surface from pyarrow.
+_TIPOS = parquet_types(_PARQUET)
 
 fuente = FileSource(
     name="credito_batch",

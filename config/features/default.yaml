@@ -103,8 +103,15 @@ output_path: data/processed/features.parquet
 # read as UTC; point-in-time joins depend on ordering, which localising cannot change.
 event_timestamp_timezone: UTC
 
+# The Feast entity every view joins on. One ID per row, so it keys a loan, not a borrower.
+entity_name: cliente
+
+# How many loans `make feast-verify` replays through the point-in-time check.
+verify_sample: 200
+
 # Feast feature views. Grouped so a consumer can pull only what it needs; the spec
-# validates that these cover every feature column exactly once.
+# rejects a column claimed twice or reserved, and tests/pipelines/test_features.py checks
+# the views against the built table so a forgotten column cannot slip through either.
 feature_views:
   credito_solicitud:      # what the applicant declares on the form
     - tipo_credito

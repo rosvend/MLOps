@@ -11,9 +11,10 @@ part in an import cycle.
 
 from functools import lru_cache
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import yaml
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, PositiveInt, model_validator
 
 SPEC_PATH = Path(__file__).resolve().parents[2] / "config" / "features" / "default.yaml"
 
@@ -130,7 +131,20 @@ class FeatureSpec(BaseModel):
     engineering: Engineering
     output_path: str
     event_timestamp_timezone: str = "UTC"
+    entity_name: str
+    verify_sample: PositiveInt
     feature_views: dict[str, list[str]]
+
+    @model_validator(mode="after")
+    def _the_timezone_exists(self):
+        """Caught here rather than mid-pipeline, where tz_localize raises on the typo."""
+        try:
+            ZoneInfo(self.event_timestamp_timezone)
+        except (KeyError, ValueError) as exc:
+            raise ValueError(
+                f"event_timestamp_timezone desconocida: {self.event_timestamp_timezone!r}"
+            ) from exc
+        return self
 
     @property
     def no_son_features(self) -> frozenset[str]:

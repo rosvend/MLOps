@@ -15,7 +15,7 @@ from src.features.spec import default_spec  # noqa: E402
 _SPEC = default_spec()
 
 cliente = Entity(
-    name="cliente",
+    name=_SPEC.entity_name,
     join_keys=[_SPEC.entity_key],
     value_type=ValueType.STRING,
     description=(

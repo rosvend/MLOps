@@ -15,7 +15,7 @@ features:
 feast-apply: features
 	uv run feast -c feature_repo apply
 
-feast-verify:
+feast-verify: feast-apply
 	uv run python -m src.pipelines.feature_store_check
 
 score:
