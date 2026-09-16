@@ -28,6 +28,20 @@ dependencies = [
     "xgboost>=3.4.1",
 ]
 
+[dependency-groups]
+# Only what scoring a logistic regression needs. The boosters, MLflow and Feast's dask
+# stack train and register models; they have no part in answering a request.
+serving = [
+    "fastapi>=0.141.1",
+    "uvicorn>=0.52.4",
+    "joblib>=1.5.3",
+    "scikit-learn>=1.9.0",
+    "pydantic>=2.13.4",
+    "pandas>=2.3.3",
+    "numpy>=2.5.2",
+    "pyyaml>=6.0.2",
+]
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]

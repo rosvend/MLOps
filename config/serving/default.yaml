@@ -1,0 +1,12 @@
+# Batch scoring service. The artifact is produced by `make export-champion` from the
+# MLflow run recorded in reports/champion.json - never hand-built.
+
+model_path: models/champion.joblib
+meta_path: models/champion.meta.json
+
+# A batch is a convenience, not an excuse to hold an unbounded request in memory.
+max_batch_size: 1000
+
+# Applications arrive without an outcome and usually without a loan date; "now" is the
+# decision moment. The id the caller sends is echoed back on every prediction.
+default_entity_id: CLI-0000000

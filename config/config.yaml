@@ -3,4 +3,5 @@ defaults:
   - features: default
   - model: heuristic
   - training: default
+  - serving: default
   - _self_

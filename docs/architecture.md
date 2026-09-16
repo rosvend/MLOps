@@ -59,7 +59,7 @@ Green outline is shipped, orange is next in dependency order, dashed grey is lat
 | 6 | Feature store | Feast | `feature_repo/` | shipped (offline only) |
 | 7 | Train | scikit-learn, XGBoost, LightGBM, Optuna | `src/models/`, `src/pipelines/train.py` | shipped |
 | 8 | Track + register | MLflow | `mlflow.db` | tracking shipped, registry next |
-| 9 | Serve | FastAPI + Docker | `src/deployment/`, `docker/` | later |
+| 9 | Serve | FastAPI + Docker | `src/api/`, `docker/` | shipped (batch) |
 | 10 | Monitor | Evidently | `src/monitoring/` | later |
 | — | Versioning | DVC | — | next |
 | — | CI | GitHub Actions | `.github/workflows/` | shipped |

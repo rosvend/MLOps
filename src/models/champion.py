@@ -27,6 +27,7 @@ class CandidateResult:
     fit_seconds: float = float("nan")
     predict_ms_per_1k: float = float("nan")
     run_id: str | None = None
+    model_id: str | None = None
     tuned: bool = True
 
     def score(self, metric: str) -> float:

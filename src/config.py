@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict
 
 from src.features.spec import FeatureSpec
 from src.models.scorecard import Scorecard
-from src.models.training_spec import TrainingSpec
+from src.models.training_spec import ServingSpec, TrainingSpec
 
 CONFIG_DIR = Path(__file__).resolve().parents[1] / "config"
 DEFAULT_CONFIG_NAME = "config"
@@ -38,6 +38,7 @@ class Config(BaseModel):
     features: FeatureSpec
     model: Scorecard
     training: TrainingSpec
+    serving: ServingSpec
 
 
 def from_dict(raw: dict) -> Config:
