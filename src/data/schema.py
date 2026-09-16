@@ -1,6 +1,7 @@
 import pandas as pd
 import pandera.pandas as pa
 
+from src.features.derive import RANGO_EDAD_LABELS
 from src.features.cleaning import (
     EDAD_ADULTA,
     EDAD_MAXIMA,
@@ -53,7 +54,7 @@ class CreditoFeaturesSchema(pa.DataFrameModel):
     ratio_ingreso_declarado_bureau: pd.Float64Dtype = pa.Field(ge=0, nullable=True)
     creditos_por_anio_adulto: pd.Float64Dtype = pa.Field(ge=0, nullable=True)
     tiene_mora_bureau: bool = pa.Field()
-    rango_edad: pd.CategoricalDtype = pa.Field(nullable=True)
+    rango_edad: pd.CategoricalDtype = pa.Field(isin=RANGO_EDAD_LABELS, nullable=True)
     mes_prestamo: str = pa.Field(str_matches=r"^\d{4}-\d{2}$")
 
     class Config:
@@ -66,7 +67,8 @@ class CreditoFeaturesSchema(pa.DataFrameModel):
 
     @pa.dataframe_check
     def fecha_prestamo_no_es_futura(cls, df: pd.DataFrame) -> pd.Series:
-        return df["fecha_prestamo"] <= pd.Timestamp.today()
+        # Compare dates, not instants: a loan disbursed at 14:40 today is not in the future.
+        return df["fecha_prestamo"].dt.normalize() <= pd.Timestamp.today().normalize()
 
 
 class CreditoLabelledSchema(CreditoFeaturesSchema):

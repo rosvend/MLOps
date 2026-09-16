@@ -96,3 +96,40 @@ def test_scoring_is_identical_on_the_leakage_safe_view(prepared, sample_source):
 
     assert score_frame(features(prepared)).equals(completo)
     assert score_frame(features(prepare_features(sample_source))).equals(completo)
+
+
+def test_decile_metrics_are_order_independent(prepared):
+    """A 21-point scale is mostly ties; equal scores must not be split by row position."""
+    import numpy as np
+
+    from src.models.evaluate import _decile_metrics
+
+    scores = pd.Series(list(range(400)) * 1)
+    defaulted = pd.Series([i % 7 == 0 for i in range(400)])
+    barajado = np.random.default_rng(0).permutation(400)
+
+    original = _decile_metrics(scores, defaulted)
+    mezclado = _decile_metrics(
+        scores.iloc[barajado].reset_index(drop=True), defaulted.iloc[barajado].reset_index(drop=True)
+    )
+
+    assert original == mezclado
+
+
+def test_tied_scores_share_a_band():
+    from src.models.evaluate import decile_rates
+
+    empatados = pd.Series([5] * 300)
+    defaulted = pd.Series([i % 4 == 0 for i in range(300)])
+
+    assert len(decile_rates(empatados, defaulted)) == 1
+
+
+def test_the_decile_knobs_come_from_config_not_a_module_constant():
+    from src.models.evaluate import _decile_metrics
+
+    scores = pd.Series(range(100))
+    defaulted = pd.Series([i % 5 == 0 for i in range(100)])
+
+    assert math.isnan(_decile_metrics(scores, defaulted, decile_minimo=200)["decile_lift"])
+    assert not math.isnan(_decile_metrics(scores, defaulted, decile_minimo=50)["decile_lift"])

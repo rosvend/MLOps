@@ -30,7 +30,12 @@ application scores the same alone as it does inside a portfolio.
 
 An application with nothing filled in scores **5** — above the threshold of 4 — because absence
 itself charges points in three rules. That is deliberate: maximum uncertainty goes to manual
-review. A missing *column*, as opposed to a missing value, raises instead of scoring.
+review.
+
+A missing *column* is a different thing from a missing value, and `score_frame` raises on it.
+The single-record `score()` cannot make that distinction — a dict is not a schema — so a
+serving endpoint must validate its payload against `CreditoFeaturesSchema` before scoring, or
+a typo'd field name will read as "unknown" and quietly add points.
 
 ## The rules
 
@@ -140,16 +145,21 @@ Scored over all 10 763 loans, at the configured threshold of 4:
 | --- | ---: | --- |
 | AUC | 0.676 | — |
 | **Gini** | **0.352** | 0.248 — bureau score alone |
-| Top decile default rate | 11.42 % | 11.1 % — worst manual segment |
-| Bottom decile default rate | 1.67 % | 1.4 % — best manual segment |
-| Decile lift | 6.84× | 7.7× — best/worst manual segment |
+| Top band default rate | 12.33 % | 11.1 % — worst manual segment |
+| Bottom band default rate | 1.75 % | 1.4 % — best manual segment |
+| Band lift | 7.06× | 7.7× — best/worst manual segment |
 | Flagged share | 15.7 % | — |
 | Precision | 10.28 % (2.17× base) | — |
 | Recall | 34.1 % | — |
 
-Gini clears the bureau score comfortably (+42 %). The 6.84× decile spread sits just under the
-EDA's 7.7×, but the two are not the same measurement: the 7.7× compares the best and worst of
-34 hand-picked segments with n ≥ 100, while 6.84× is a strict decile split over the whole book.
+Gini clears the bureau score comfortably (+42 %). The 7.06× spread sits just under the EDA's
+7.7×, but the two are not the same measurement: the 7.7× compares the best and worst of 34
+hand-picked segments with n ≥ 100, while 7.06× is a split over the whole book.
+
+The split yields nine bands, not ten. A 21-point integer scale over 10 763 loans means decile
+edges land inside large tied groups, and loans with the same score share a band rather than
+being separated by their position in the file. Splitting ties by position made the reported
+lift move between 6.83× and 7.24× on the same data simply by re-sorting the rows.
 
 Every rule earns its place — removing any one of them costs Gini:
 

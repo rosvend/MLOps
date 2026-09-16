@@ -6,6 +6,10 @@
 #     points = round((band_default_rate / base_rate - 1) * lift_multiplier)
 # so a band that doubles the portfolio rate costs +4 and one that halves it pays -2.
 # The rate behind each number is tabulated in docs/heuristic-model.md.
+#
+# One exception: independiente_joven is an interaction rule, so its denominator is the
+# employed-under-36 rate (5.62 %), not the portfolio base rate - age_band already charges
+# for youth. round((9.38/5.62 - 1) * 4) = 3. See docs/heuristic-model.md.
 
 threshold: 4
 deciles: 10

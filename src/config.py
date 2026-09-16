@@ -7,6 +7,7 @@ typed contract, so a wrong shape fails at load rather than deep inside a pipelin
 from pathlib import Path
 
 from hydra import compose, initialize_config_dir
+from hydra.core.global_hydra import GlobalHydra
 from omegaconf import OmegaConf
 from pydantic import BaseModel, ConfigDict
 
@@ -44,7 +45,14 @@ def load_config(
     config_dir: str | Path = CONFIG_DIR,
     config_name: str = DEFAULT_CONFIG_NAME,
 ) -> Config:
-    """Compose API rather than @hydra.main, so tests and notebooks can load config too."""
-    with initialize_config_dir(version_base=None, config_dir=str(Path(config_dir).resolve())):
+    """Compose API rather than @hydra.main, so tests and notebooks can load config too.
+
+    Reuses an existing Hydra session when there is one: initialize_config_dir raises if
+    called from inside a @hydra.main entry point.
+    """
+    if GlobalHydra.instance().is_initialized():
         cfg = compose(config_name=config_name, overrides=overrides or [])
+    else:
+        with initialize_config_dir(version_base=None, config_dir=str(Path(config_dir).resolve())):
+            cfg = compose(config_name=config_name, overrides=overrides or [])
     return from_dict(OmegaConf.to_container(cfg, resolve=True))

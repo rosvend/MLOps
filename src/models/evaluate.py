@@ -2,7 +2,6 @@
 
 import logging
 
-import numpy as np
 import pandas as pd
 from scipy import stats
 
@@ -27,17 +26,30 @@ def auc(scores: pd.Series, defaulted: pd.Series) -> float:
     return float(estadistico / (len(en_mora) * len(al_dia)))
 
 
+def gini_from_auc(valor: float) -> float:
+    return 2 * valor - 1
+
+
 def gini(scores: pd.Series, defaulted: pd.Series) -> float:
-    return 2 * auc(scores, defaulted) - 1
+    return gini_from_auc(auc(scores, defaulted))
 
 
-def decile_rates(scores: pd.Series, defaulted: pd.Series) -> pd.Series:
-    """Ties are broken by position, the usual convention for banded scorecards."""
+def decile_rates(scores: pd.Series, defaulted: pd.Series, deciles: int = DECILES) -> pd.Series:
+    """Equal scores share a band: the score is the decision, not the row's position.
+
+    A 21-point integer scale over thousands of loans means decile edges fall inside huge
+    tied groups, so splitting them by position would make the metric depend on file order.
+    Ties collapse instead, which can yield fewer than `deciles` bands.
+    """
     if len(scores) < 2:
         return pd.Series([defaulted.mean()] if len(scores) else [], dtype=float)
-    bins = min(DECILES, len(scores))
-    deciles = pd.qcut(scores.rank(method="first"), bins, labels=False)
-    return defaulted.groupby(deciles).mean()
+    bandas = pd.qcut(
+        scores.rank(method="average"), min(deciles, len(scores)), labels=False, duplicates="drop"
+    )
+    if bandas.isna().all():
+        # Every loan scored the same: one band, not none.
+        return pd.Series([defaulted.mean()], dtype=float)
+    return defaulted.groupby(bandas).mean()
 
 
 def precision_recall(scores: pd.Series, defaulted: pd.Series, threshold: int) -> dict[str, float]:
@@ -50,26 +62,38 @@ def precision_recall(scores: pd.Series, defaulted: pd.Series, threshold: int) ->
     }
 
 
-def _decile_metrics(scores: pd.Series, defaulted: pd.Series) -> dict[str, float]:
+def _decile_metrics(
+    scores: pd.Series,
+    defaulted: pd.Series,
+    deciles: int = DECILES,
+    decile_minimo: int = DECILE_MINIMO,
+) -> dict[str, float]:
     nan = float("nan")
-    if len(scores) < DECILE_MINIMO:
+    if len(scores) < decile_minimo:
         _log.warning(
-            "Métricas por decil omitidas: %d créditos, mínimo %d", len(scores), DECILE_MINIMO
+            "Métricas por decil omitidas: %d créditos, mínimo %d", len(scores), decile_minimo
         )
         return {"top_decile_rate": nan, "bottom_decile_rate": nan, "decile_lift": nan}
-    tasas = decile_rates(scores, defaulted)
+    tasas = decile_rates(scores, defaulted, deciles)
     peor, mejor = float(tasas.iloc[-1]), float(tasas.iloc[0])
     if not mejor:
-        # A clean bottom decile makes the ratio undefined; inf would read as a real number.
-        _log.warning("Lift por decil no calculable: el decil más seguro no trae incumplimientos")
+        # A clean bottom band makes the ratio undefined; inf would read as a real number.
+        _log.warning("Lift por decil no calculable: la banda más segura no trae incumplimientos")
         return {"top_decile_rate": peor, "bottom_decile_rate": mejor, "decile_lift": nan}
     return {"top_decile_rate": peor, "bottom_decile_rate": mejor, "decile_lift": peor / mejor}
 
 
-def evaluate(scores: pd.Series, defaulted: pd.Series, threshold: int) -> dict[str, float]:
+def evaluate(
+    scores: pd.Series,
+    defaulted: pd.Series,
+    threshold: int,
+    deciles: int = DECILES,
+    decile_minimo: int = DECILE_MINIMO,
+) -> dict[str, float]:
+    valor_auc = auc(scores, defaulted)
     return {
-        "auc": auc(scores, defaulted),
-        "gini": gini(scores, defaulted),
-        **_decile_metrics(scores, defaulted),
+        "auc": valor_auc,
+        "gini": gini_from_auc(valor_auc),
+        **_decile_metrics(scores, defaulted, deciles, decile_minimo),
         **precision_recall(scores, defaulted, threshold),
     }

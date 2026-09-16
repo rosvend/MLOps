@@ -61,3 +61,33 @@ def test_a_typo_in_a_key_fails_loudly_instead_of_keeping_a_default(spec):
 def test_the_shipped_vocabularies_match_the_pipeline(spec):
     assert set(spec["points"]["rango_edad"]) == set(RANGO_EDAD_LABELS)
     assert set(spec["points"]["tendencia"]) == set(TENDENCIAS)
+
+
+@pytest.mark.parametrize(
+    "corte,invertido",
+    [
+        ("puntaje_bureau_terciles", [813, 770]),
+        ("huella_bandas", [6, 3]),
+        ("brecha_ingreso_cuartiles", [3.594, 1.081, 1.807]),
+    ],
+)
+def test_unsorted_cut_points_are_rejected(spec, corte, invertido):
+    """An inverted override would mis-band every applicant instead of failing."""
+    spec["cut_points"][corte] = invertido
+
+    with pytest.raises(ValidationError, match=corte):
+        Scorecard(**spec)
+
+
+def test_a_renamed_inquiry_band_is_rejected(spec):
+    spec["points"]["huella"] = {"0-2": -1, "3-6": 0, "7+": 2}
+
+    with pytest.raises(ValidationError, match="huella"):
+        Scorecard(**spec)
+
+
+def test_a_renamed_bureau_band_is_rejected(spec):
+    spec["points"]["puntaje_bureau"] = {"low": 2, "mid": -1, "high": -2}
+
+    with pytest.raises(ValidationError, match="puntaje_bureau"):
+        Scorecard(**spec)

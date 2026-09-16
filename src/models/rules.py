@@ -11,7 +11,7 @@ from typing import Any
 
 import pandas as pd
 
-from src.models.scorecard import Scorecard, default_scorecard
+from src.models.scorecard import HUELLA_BANDAS, PUNTAJE_BANDAS, Scorecard, default_scorecard
 
 Record = Mapping[str, Any] | pd.Series
 
@@ -54,8 +54,10 @@ def bureau_score_band(record: Record, scorecard: Scorecard | None = None) -> int
         return s.points.puntaje_bureau_ausente
     bajo, alto = s.cut_points.puntaje_bureau_terciles
     if puntaje < bajo:
-        return s.points.puntaje_bureau["bajo"]
-    return s.points.puntaje_bureau["medio" if puntaje < alto else "alto"]
+        etiqueta = PUNTAJE_BANDAS[0]
+    else:
+        etiqueta = PUNTAJE_BANDAS[1] if puntaje < alto else PUNTAJE_BANDAS[2]
+    return _puntos(s.points.puntaje_bureau, etiqueta, "puntaje_datacredito")
 
 
 def inquiry_band(record: Record, scorecard: Scorecard | None = None) -> int:
@@ -66,8 +68,10 @@ def inquiry_band(record: Record, scorecard: Scorecard | None = None) -> int:
         return 0
     bajo, medio = s.cut_points.huella_bandas
     if huella <= bajo:
-        return s.points.huella["0-3"]
-    return s.points.huella["4-6" if huella <= medio else "7+"]
+        etiqueta = HUELLA_BANDAS[0]
+    else:
+        etiqueta = HUELLA_BANDAS[1] if huella <= medio else HUELLA_BANDAS[2]
+    return _puntos(s.points.huella, etiqueta, "huella_consulta")
 
 
 def age_band(record: Record, scorecard: Scorecard | None = None) -> int:

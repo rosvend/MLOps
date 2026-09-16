@@ -2,8 +2,8 @@ import numpy as np
 import pandas as pd
 
 TENDENCIAS = ["Decreciente", "Estable", "Creciente"]
-TIPOS_CREDITO_FRECUENTES = [4, 9, 10]
-TIPOS_CREDITO = ["4", "9", "10", "Otro"]
+TIPOS_CREDITO_FRECUENTES = ["4", "9", "10"]
+TIPOS_CREDITO = [*TIPOS_CREDITO_FRECUENTES, "Otro"]
 TIPOS_LABORAL = ["Empleado", "Independiente"]
 EDAD_ADULTA = 18
 EDAD_MAXIMA = 100
@@ -43,7 +43,17 @@ def nullify_sentinels(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def drop_unusable_columns(df: pd.DataFrame) -> pd.DataFrame:
-    return df.drop(columns=_COLUMNAS_SIN_VARIANZA)
+    # errors=ignore: a scoring payload has no reason to carry a column we only delete.
+    return df.drop(columns=_COLUMNAS_SIN_VARIANZA, errors="ignore")
+
+
+def _codigo(valor: object) -> str:
+    """4, 4.0 and "4" are the same product code, whatever the source stores."""
+    if pd.isna(valor):
+        return ""
+    if isinstance(valor, (int, float, np.integer, np.floating)) and float(valor).is_integer():
+        return str(int(valor))
+    return str(valor).strip()
 
 
 def _clave_pago(valor: object) -> str | None:
@@ -88,10 +98,10 @@ def coerce_types(df: pd.DataFrame) -> pd.DataFrame:
 def group_rare_credit_types(df: pd.DataFrame) -> pd.DataFrame:
     """Residual product codes carry no sample; kept apart so they cannot fake a finding."""
     df = df.copy()
-    frecuente = df["tipo_credito"].isin(TIPOS_CREDITO_FRECUENTES)
+    codigos = df["tipo_credito"].map(_codigo)
     # Fixed categories: otherwise the encoding would depend on which rows are in the batch.
     df["tipo_credito"] = pd.Categorical(
-        np.where(frecuente, df["tipo_credito"].astype(str), "Otro"), categories=TIPOS_CREDITO
+        np.where(codigos.isin(TIPOS_CREDITO_FRECUENTES), codigos, "Otro"), categories=TIPOS_CREDITO
     )
     return df
 

@@ -205,6 +205,18 @@ adopt it there or drop the dependency; leaving it declared and unused is the wor
 
 These block feature engineering, so they are answered before stage 5:
 
+- Does the whole DataCrédito block — `puntaje_datacredito`, `huella_consulta`,
+  `promedio_ingresos_datacredito`, `tendencia_ingresos` and `saldo_mora` — come from an
+  extract-time snapshot or an origination-time pull? Only `saldo_mora` is currently excluded,
+  but all five arrive together, and those four drive about 70 % of the heuristic's Gini. If the
+  pull is post-origination, `huella_consulta` counts inquiries made *after* the loan and the
+  reported Gini is not achievable at decision time. Cheap interim check: correlate
+  `huella_consulta` against `fecha_prestamo` recency.
+- Should a derived risk flag distinguish "no" from "unknown"? `cuota_supera_salario` and
+  `tiene_mora_bureau` both `.fillna(False)`, so an applicant whose salary was nullified as a
+  sentinel is recorded as "instalment does not exceed salary". That contradicts the stance
+  taken on the target, where an unreadable value raises. Making them nullable changes the
+  schema and the feature semantics, so it belongs with the first trained model.
 - Is `saldo_mora` observed **at origination** or afterwards? If afterwards,
   `tiene_mora_bureau` is leakage; if before, it is a strong unused signal — 36.4 % default
   against a 4.6 % base, though on only 55 loans.

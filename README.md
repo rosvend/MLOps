@@ -37,7 +37,7 @@ make score
 `make score` runs the heuristic scorecard over the portfolio. It is a rule-based baseline read
 straight off the EDA — one pure function per finding, points summed, no fitting — and it exists to
 set the bar a trained model has to clear: **Gini 0.352 in-sample** against the bureau score's
-0.248, with the riskiest decile defaulting at 11.4 % and the safest at 1.7 %. The bands and points
+0.248, with the riskiest band defaulting at 12.3 % and the safest at 1.8 %. The bands and points
 were measured on the same loans they are scored against, so these numbers are optimistic — a
 held-out split belongs with the first trained model. Full rule table, exclusions and caveats in
 [`docs/heuristic-model.md`](docs/heuristic-model.md).

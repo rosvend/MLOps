@@ -16,6 +16,10 @@ from src.features.derive import RANGO_EDAD_LABELS
 
 SCORECARD_PATH = Path(__file__).resolve().parents[2] / "config" / "model" / "heuristic.yaml"
 
+# Band labels the points tables must key on; the validators below enforce the match.
+PUNTAJE_BANDAS = ("bajo", "medio", "alto")
+HUELLA_BANDAS = ("0-3", "4-6", "7+")
+
 
 class CutPoints(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -70,8 +74,19 @@ class Scorecard(BaseModel):
                 f"points.tendencia {sorted(self.points.tendencia)} no coincide con "
                 f"TENDENCIAS {sorted(TENDENCIAS)}"
             )
-        if set(self.points.puntaje_bureau) != {"bajo", "medio", "alto"}:
-            raise ValueError("points.puntaje_bureau debe traer las bandas bajo, medio y alto")
+        if set(self.points.puntaje_bureau) != set(PUNTAJE_BANDAS):
+            raise ValueError(f"points.puntaje_bureau debe traer las bandas {list(PUNTAJE_BANDAS)}")
+        if set(self.points.huella) != set(HUELLA_BANDAS):
+            raise ValueError(f"points.huella debe traer las bandas {list(HUELLA_BANDAS)}")
+        return self
+
+    @model_validator(mode="after")
+    def _cut_points_ascend(self):
+        # An inverted override would silently mis-band every applicant instead of failing.
+        for nombre in ("puntaje_bureau_terciles", "huella_bandas", "brecha_ingreso_cuartiles"):
+            cortes = getattr(self.cut_points, nombre)
+            if list(cortes) != sorted(cortes):
+                raise ValueError(f"cut_points.{nombre} debe ir de menor a mayor: {list(cortes)}")
         return self
 
     @model_validator(mode="after")
