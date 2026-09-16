@@ -79,3 +79,20 @@ def test_a_single_class_batch_says_why_the_metrics_are_missing(caplog):
 
     assert math.isnan(resultado)
     assert "una sola clase" in caplog.text
+
+
+def test_the_scorecard_never_needs_a_withheld_column():
+    from src.features.contract import PROHIBIDAS, TARGET
+
+    assert not REQUIRED_COLUMNS & (PROHIBIDAS | {TARGET})
+
+
+def test_scoring_is_identical_on_the_leakage_safe_view(prepared, sample_source):
+    """Same scores from the full frame, the model view, and the label-free serving path."""
+    from src.features.contract import features
+    from src.pipelines.prepare import prepare_features
+
+    completo = score_frame(prepared)
+
+    assert score_frame(features(prepared)).equals(completo)
+    assert score_frame(features(prepare_features(sample_source))).equals(completo)
