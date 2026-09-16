@@ -62,6 +62,10 @@ loan was originated. Details in [`docs/feature-store.md`](docs/feature-store.md)
 in MLflow and picks a champion on a held-out window of the newest vintages. Details and the
 results table in [`docs/model-training.md`](docs/model-training.md).
 
+`make export-champion` exports the stage-7 champion as a joblib artifact with its frozen
+decision threshold, and `docker compose up --build` serves it at `POST /predict/batch`.
+Details in [`docs/serving.md`](docs/serving.md).
+
 ## Swapping the data source
 
 `src/pipelines/prepare.py` is the single seam the rest of the pipeline attaches to. It takes any

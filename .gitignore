@@ -237,6 +237,10 @@ multirun/
 # Feast registry is a build artifact: feast apply regenerates it
 feature_repo/data/
 
+# Serving artifact: rebuilt by `make export-champion` from the recorded MLflow run
+models/*.joblib
+models/*.meta.json
+
 # MLflow tracking store, artifacts and training reports
 mlflow.db
 mlartifacts/

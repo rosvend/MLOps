@@ -12,6 +12,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, model_validator
 
 TRAINING_PATH = Path(__file__).resolve().parents[2] / "config" / "training" / "default.yaml"
+SERVING_PATH = Path(__file__).resolve().parents[2] / "config" / "serving" / "default.yaml"
 
 
 class Distribution(BaseModel):
@@ -124,3 +125,26 @@ class TrainingSpec(BaseModel):
 @lru_cache(maxsize=1)
 def default_training_spec() -> TrainingSpec:
     return TrainingSpec(**yaml.safe_load(TRAINING_PATH.read_text(encoding="utf-8")))
+
+
+class ServingSpec(BaseModel):
+    """Where the scoring artifact lives and how large a batch may be."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    model_path: str
+    meta_path: str
+    max_batch_size: int
+    default_entity_id: str
+
+    @model_validator(mode="after")
+    def _batch_is_bounded(self):
+        if not 0 < self.max_batch_size <= 100_000:
+            raise ValueError(f"serving.max_batch_size fuera de rango: {self.max_batch_size}")
+        return self
+
+
+@lru_cache(maxsize=1)
+def default_serving_spec() -> ServingSpec:
+    """Plain YAML, no Hydra: the API composes nothing and should not ship a composer."""
+    return ServingSpec(**yaml.safe_load(SERVING_PATH.read_text(encoding="utf-8")))

@@ -1,4 +1,4 @@
-.PHONY: install test eda features feast-apply feast-verify score train
+.PHONY: install test eda features feast-apply feast-verify score train export-champion serve
 
 install:
 	uv sync
@@ -20,6 +20,12 @@ feast-verify: feast-apply
 
 train: feast-apply
 	uv run python -m src.pipelines.train
+
+export-champion:
+	uv run python -m src.pipelines.export_champion
+
+serve: export-champion
+	uv run uvicorn src.api.app:app --host 0.0.0.0 --port 8000
 
 score:
 	uv run python -m src.pipelines.score
