@@ -45,18 +45,22 @@ class FeatureEngineer(TransformerMixin, BaseEstimator):
         categoricas = set(self._categoricas(X))
         return [c for c in X.columns if c not in categoricas]
 
-    @staticmethod
-    def _rechazar_columnas_opacas(X: pd.DataFrame) -> None:
+    def _rechazar_columnas_opacas(self, X: pd.DataFrame) -> None:
         """Coercing anything that is not already a number is never harmless here.
 
         A timestamp coerces to int64 nanoseconds - the vintage itself, correlation 1.0
         with the loan date - and text coerces to NaN and then to a constant. Both are
         silent. The only valid input is the view built by src/features/contract.py.
+
+        What counts as categorical comes from the spec, the same source _categoricas
+        uses: Feast returns those columns as strings and pandas as categories, and a
+        guard that disagreed with the encoder would reject the feature store's own output.
         """
+        categoricas = set(self._categoricas(X))
         opacas = {
             c: str(X[c].dtype)
             for c in X.columns
-            if str(X[c].dtype) != "category" and not pd.api.types.is_numeric_dtype(X[c].dtype)
+            if c not in categoricas and not pd.api.types.is_numeric_dtype(X[c].dtype)
         }
         if opacas:
             raise ValueError(
