@@ -1,0 +1,239 @@
+{
+  "info": {
+    "name": "Credit scoring API",
+    "description": "Batch scoring and drift checks for the champion credit model. Point base_url at the local API (make serve / docker compose up) or at the ngrok tunnel from scripts/setup_tunnel.sh.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"responds 200\", function () {",
+              "    pm.expect(pm.response.code).to.eql(200);",
+              "});",
+              "",
+              "pm.test(\"reports the status and whether the model is loaded\", function () {",
+              "    const body = pm.response.json();",
+              "    pm.expect(body).to.have.property(\"status\");",
+              "    pm.expect(body).to.have.property(\"model_loaded\");",
+              "    pm.expect(body.model_loaded).to.be.a(\"boolean\");",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/health",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "health"
+          ]
+        },
+        "description": "Liveness plus what the process actually loaded."
+      }
+    },
+    {
+      "name": "Predict batch (default threshold)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"responds 200\", function () {",
+              "    pm.expect(pm.response.code).to.eql(200);",
+              "});",
+              "",
+              "pm.test(\"the body carries a predictions array\", function () {",
+              "    const body = pm.response.json();",
+              "    pm.expect(body).to.have.property(\"predictions\");",
+              "    pm.expect(body).to.have.property(\"threshold\");",
+              "    pm.expect(body.predictions).to.be.an(\"array\").that.is.not.empty;",
+              "});",
+              "",
+              "pm.test(\"every prediction carries a probability and a review flag\", function () {",
+              "    pm.response.json().predictions.forEach(function (prediction) {",
+              "        pm.expect(prediction).to.have.property(\"probability_default\");",
+              "        pm.expect(prediction.probability_default).to.be.a(\"number\");",
+              "        pm.expect(prediction.probability_default).to.be.within(0, 1);",
+              "        pm.expect(prediction).to.have.property(\"review_flag\");",
+              "        pm.expect(prediction.review_flag).to.be.a(\"boolean\");",
+              "    });",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/predict/batch",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "predict",
+            "batch"
+          ]
+        },
+        "description": "Two applications: one complete, one without the optional bureau fields.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"records\": [\n    {\n      \"application_id\": \"APP-00001\",\n      \"fecha_prestamo\": \"2025-01-07T14:40:00\",\n      \"tipo_credito\": \"4\",\n      \"capital_prestado\": 1852560,\n      \"plazo_meses\": 12,\n      \"edad_cliente\": 32,\n      \"tipo_laboral\": \"Empleado\",\n      \"salario_cliente\": 3500000,\n      \"total_otros_prestamos\": 1000000,\n      \"cuota_pactada\": 128650,\n      \"puntaje_datacredito\": 795,\n      \"cant_creditosvigentes\": 2,\n      \"huella_consulta\": 2,\n      \"saldo_mora\": 0,\n      \"saldo_total\": 12000,\n      \"saldo_principal\": 10000,\n      \"creditos_sectorFinanciero\": 2,\n      \"creditos_sectorCooperativo\": 0,\n      \"creditos_sectorReal\": 0,\n      \"promedio_ingresos_datacredito\": 916148,\n      \"tendencia_ingresos\": \"Creciente\"\n    },\n    {\n      \"application_id\": \"APP-00002\",\n      \"tipo_credito\": \"9\",\n      \"capital_prestado\": 1200000,\n      \"plazo_meses\": 6,\n      \"edad_cliente\": 45,\n      \"tipo_laboral\": \"Independiente\",\n      \"total_otros_prestamos\": 500000,\n      \"cuota_pactada\": 210000,\n      \"cant_creditosvigentes\": 3,\n      \"huella_consulta\": 1,\n      \"creditos_sectorFinanciero\": 1,\n      \"creditos_sectorCooperativo\": 0,\n      \"creditos_sectorReal\": 0\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Predict batch (custom decision_threshold)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"responds 200\", function () {",
+              "    pm.expect(pm.response.code).to.eql(200);",
+              "});",
+              "",
+              "pm.test(\"the body carries a predictions array\", function () {",
+              "    const body = pm.response.json();",
+              "    pm.expect(body).to.have.property(\"predictions\");",
+              "    pm.expect(body).to.have.property(\"threshold\");",
+              "    pm.expect(body.predictions).to.be.an(\"array\").that.is.not.empty;",
+              "});",
+              "",
+              "pm.test(\"every prediction carries a probability and a review flag\", function () {",
+              "    pm.response.json().predictions.forEach(function (prediction) {",
+              "        pm.expect(prediction).to.have.property(\"probability_default\");",
+              "        pm.expect(prediction.probability_default).to.be.a(\"number\");",
+              "        pm.expect(prediction.probability_default).to.be.within(0, 1);",
+              "        pm.expect(prediction).to.have.property(\"review_flag\");",
+              "        pm.expect(prediction.review_flag).to.be.a(\"boolean\");",
+              "    });",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/predict/batch",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "predict",
+            "batch"
+          ]
+        },
+        "description": "decision_threshold is a what-if: review_flag still comes from the frozen cut-point, and the custom one is reported alongside it.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"records\": [\n    {\n      \"application_id\": \"APP-00001\",\n      \"fecha_prestamo\": \"2025-01-07T14:40:00\",\n      \"tipo_credito\": \"4\",\n      \"capital_prestado\": 1852560,\n      \"plazo_meses\": 12,\n      \"edad_cliente\": 32,\n      \"tipo_laboral\": \"Empleado\",\n      \"salario_cliente\": 3500000,\n      \"total_otros_prestamos\": 1000000,\n      \"cuota_pactada\": 128650,\n      \"puntaje_datacredito\": 795,\n      \"cant_creditosvigentes\": 2,\n      \"huella_consulta\": 2,\n      \"saldo_mora\": 0,\n      \"saldo_total\": 12000,\n      \"saldo_principal\": 10000,\n      \"creditos_sectorFinanciero\": 2,\n      \"creditos_sectorCooperativo\": 0,\n      \"creditos_sectorReal\": 0,\n      \"promedio_ingresos_datacredito\": 916148,\n      \"tendencia_ingresos\": \"Creciente\"\n    },\n    {\n      \"application_id\": \"APP-00002\",\n      \"tipo_credito\": \"9\",\n      \"capital_prestado\": 1200000,\n      \"plazo_meses\": 6,\n      \"edad_cliente\": 45,\n      \"tipo_laboral\": \"Independiente\",\n      \"total_otros_prestamos\": 500000,\n      \"cuota_pactada\": 210000,\n      \"cant_creditosvigentes\": 3,\n      \"huella_consulta\": 1,\n      \"creditos_sectorFinanciero\": 1,\n      \"creditos_sectorCooperativo\": 0,\n      \"creditos_sectorReal\": 0\n    }\n  ],\n  \"decision_threshold\": 0.15\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Monitoring drift check",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"responds 200 with a report, or 409 with no logged traffic\", function () {",
+              "    pm.expect([200, 409]).to.include(pm.response.code);",
+              "});",
+              "",
+              "if (pm.response.code === 200) {",
+              "    pm.test(\"the report carries the three keys with their types\", function () {",
+              "        const body = pm.response.json();",
+              "        pm.expect(body).to.have.property(\"dataset_drift_detected\");",
+              "        pm.expect(body.dataset_drift_detected).to.be.a(\"boolean\");",
+              "        pm.expect(body).to.have.property(\"drift_share\");",
+              "        pm.expect(body.drift_share).to.be.a(\"number\");",
+              "        pm.expect(body.drift_share).to.be.within(0, 1);",
+              "        pm.expect(body).to.have.property(\"drifted_features\");",
+              "        pm.expect(body.drifted_features).to.be.an(\"array\");",
+              "    });",
+              "} else {",
+              "    pm.test(\"409 is the valid answer before any predictions exist\", function () {",
+              "        pm.expect(pm.response.code).to.eql(409);",
+              "    });",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/monitoring/run-drift-check",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "monitoring",
+            "run-drift-check"
+          ]
+        },
+        "description": "409 is expected while no prediction traffic has been logged yet.",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

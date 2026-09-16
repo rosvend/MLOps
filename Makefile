@@ -1,4 +1,4 @@
-.PHONY: install test eda features feast-apply feast-verify score train export-champion serve
+.PHONY: install test eda features feast-apply feast-verify score train export-champion serve tunnel
 
 install:
 	uv sync
@@ -29,3 +29,6 @@ serve: export-champion
 
 score:
 	uv run python -m src.pipelines.score
+
+tunnel:
+	./scripts/setup_tunnel.sh
