@@ -5,10 +5,18 @@ batch API → drift monitoring, for a Colombian bank's loan book.
 
 ## Tech stack
 
-pandas + pandera (prep & validation) · scikit-learn (`FeatureEngineer`, the champion
-pipeline) · Feast (offline feature store) · Optuna (hyperparameter search) · XGBoost /
-LightGBM (candidates) · MLflow (experiment tracking) · FastAPI + Docker (batch serving) ·
-Evidently AI (drift) · Hydra + pydantic (config, everywhere) · uv (dependency management)
+| Category | Tool / Library |
+| --- | --- |
+| **Dependency Management** | `uv` |
+| **Configuration** | `Hydra` + `pydantic` |
+| **Data Prep & Validation** | `pandas` + `pandera` |
+| **Feature Store** | `Feast` |
+| **Feature Engineering** | `scikit-learn` |
+| **Model Training** | `XGBoost` / `LightGBM` |
+| **Hyperparameter Search** | `Optuna` |
+| **Experiment Tracking** | `MLflow` |
+| **Batch Serving** | `FastAPI` + `Docker` |
+| **Model Monitoring** | `Evidently AI` |
 
 ## Pipeline
 
@@ -19,7 +27,7 @@ Full detail per stage in `docs/`: [architecture](docs/architecture.md) ·
 [model training](docs/model-training.md) · [serving](docs/serving.md) ·
 [monitoring](docs/monitoring.md).
 
-## Run it end to end
+## How to run it 
 
 ```bash
 make install
@@ -30,6 +38,7 @@ docker compose up --build          # batch API at :8000, monitoring endpoint inc
 make monitor                       # offline drift + model-quality report
 ```
 
+And this makes a request to the FastAPI serving endpoint:
 ```bash
 curl -X POST localhost:8000/predict/batch -H 'Content-Type: application/json' -d '{
   "records": [{"application_id":"APP-1","tipo_credito":"9","capital_prestado":4200000,
@@ -43,12 +52,38 @@ curl -X POST localhost:8000/predict/batch -H 'Content-Type: application/json' -d
 Out-of-time (train on the oldest 75% of vintages, test on the newest) comparison across all
 four candidates — the heuristic baseline, logistic regression, XGBoost and LightGBM:
 
-![PR-AUC and Gini per model, out of time](docs/plots/model_comparison_performance.png)
-![CV mean vs. out-of-time PR-AUC per tuned candidate](docs/plots/model_comparison_cv_vs_oot.png)
-![Confusion matrices at each model's own operating threshold](docs/plots/confusion_matrices.png)
-![ROC curves for all four models](docs/plots/roc_curves.png)
-![Precision-recall curves for all four models](docs/plots/pr_curves.png)
-![Normalized comparison across six metrics, parallel coordinates](docs/plots/parallel_coordinates.png)
+<table>
+<tr>
+<td align="center" width="50%">
+<img src="docs/plots/model_comparison_performance.png" width="100%"><br>
+<sub><b>PR-AUC and Gini per model, out of time</b></sub>
+</td>
+<td align="center" width="50%">
+<img src="docs/plots/model_comparison_cv_vs_oot.png" width="100%"><br>
+<sub><b>CV mean vs. out-of-time PR-AUC</b> — tuning picked a different model than selection did</sub>
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+<img src="docs/plots/confusion_matrices.png" width="100%"><br>
+<sub><b>Confusion matrices</b>, each model at its own operating threshold</sub>
+</td>
+<td align="center" width="50%">
+<img src="docs/plots/roc_curves.png" width="100%"><br>
+<sub><b>ROC curves</b>, all four candidates</sub>
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+<img src="docs/plots/pr_curves.png" width="100%"><br>
+<sub><b>Precision-recall curves</b> — the metric the selection is actually made on</sub>
+</td>
+<td align="center" width="50%">
+<img src="docs/plots/parallel_coordinates.png" width="100%"><br>
+<sub><b>Six metrics side by side</b>, normalized, parallel coordinates</sub>
+</td>
+</tr>
+</table>
 
 The best model until now is the Optuna-tuned logistic regression — 0.129 PR-AUC and 0.327
 Gini out of time, 2.2× the heuristic baseline on PR-AUC (the metric that matters at a 4.75%
