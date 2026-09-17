@@ -29,7 +29,9 @@ Reproducible experiments · Automated CI/CD · Containerized serving · Live dri
 
 ## Architecture
 
-![Pipeline: raw loan data flows through prep/validation, feature engineering and an offline Feast feature store, into Optuna/MLflow training that exports the best model, which is served behind a FastAPI batch API and watched by Evidently-based drift monitoring that signals back into training.](docs/plots/pipeline_diagram.png)
+<p align="center">
+  <img src="docs/plots/pipeline_diagram.png" alt="Pipeline: raw loan data flows through prep/validation, feature engineering and an offline Feast feature store, into Optuna/MLflow training that exports the best model, which is served behind a FastAPI batch API and watched by Evidently-based drift monitoring that signals back into training." width="100%">
+</p>
 
 Full detail per stage in `docs/`: [architecture](docs/architecture.md) ·
 [feature engineering](docs/feature-engineering.md) · [feature store](docs/feature-store.md) ·
