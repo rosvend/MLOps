@@ -53,29 +53,34 @@ Out-of-time (train on the oldest 75% of vintages, test on the newest) comparison
 four candidates — the heuristic baseline, logistic regression, XGBoost and LightGBM:
 
 <p align="center">
-  <img src="docs/plots/model_comparison_performance.png" alt="PR-AUC and Gini per model, out of time" width="49%">
-  <img src="docs/plots/model_comparison_cv_vs_oot.png" alt="CV mean vs out-of-time PR-AUC per tuned candidate" width="49%">
+  <img src="docs/plots/model_comparison_performance.png" alt="PR-AUC and Gini per model, out of time" width="85%">
 </p>
 <p align="center">
-  <sub><b>PR-AUC and Gini, out of time</b></sub> &nbsp;·&nbsp;
-  <sub><b>CV mean vs. out-of-time PR-AUC</b> — tuning picked a different model than selection did</sub>
+  <sub><b>PR-AUC and Gini per model, out of time</b> — the headline comparison across all four candidates</sub>
 </p>
 
 <p align="center">
-  <img src="docs/plots/confusion_matrices.png" alt="Confusion matrices at each model's own operating threshold" width="49%">
+  <img src="docs/plots/confusion_matrices.png" alt="Confusion matrices at each model's own operating threshold" width="85%">
+</p>
+<p align="center">
+  <sub><b>Confusion matrices</b>, each model at its own operating threshold</sub>
+</p>
+
+<p align="center">
   <img src="docs/plots/roc_curves.png" alt="ROC curves for all four models" width="49%">
+  <img src="docs/plots/pr_curves.png" alt="Precision-recall curves for all four models" width="49%">
 </p>
 <p align="center">
-  <sub><b>Confusion matrices</b>, each model at its own operating threshold</sub> &nbsp;·&nbsp;
-  <sub><b>ROC curves</b>, all four candidates</sub>
+  <sub><b>ROC curves</b></sub> &nbsp;·&nbsp;
+  <sub><b>Precision-recall curves</b> — the metric the selection is actually made on</sub>
 </p>
 
 <p align="center">
-  <img src="docs/plots/pr_curves.png" alt="Precision-recall curves for all four models" width="49%">
+  <img src="docs/plots/model_comparison_cv_vs_oot.png" alt="CV mean vs out-of-time PR-AUC per tuned candidate" width="49%">
   <img src="docs/plots/parallel_coordinates.png" alt="Six metrics normalized, parallel coordinates" width="49%">
 </p>
 <p align="center">
-  <sub><b>Precision-recall curves</b> — the metric the selection is actually made on</sub> &nbsp;·&nbsp;
+  <sub><b>CV mean vs. out-of-time PR-AUC</b> — tuning picked a different model than selection did</sub> &nbsp;·&nbsp;
   <sub><b>Six metrics side by side</b>, normalized, parallel coordinates</sub>
 </p>
 
