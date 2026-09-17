@@ -52,38 +52,32 @@ curl -X POST localhost:8000/predict/batch -H 'Content-Type: application/json' -d
 Out-of-time (train on the oldest 75% of vintages, test on the newest) comparison across all
 four candidates — the heuristic baseline, logistic regression, XGBoost and LightGBM:
 
-<table>
-<tr>
-<td align="center" width="50%">
-<img src="docs/plots/model_comparison_performance.png" width="100%"><br>
-<sub><b>PR-AUC and Gini per model, out of time</b></sub>
-</td>
-<td align="center" width="50%">
-<img src="docs/plots/model_comparison_cv_vs_oot.png" width="100%"><br>
-<sub><b>CV mean vs. out-of-time PR-AUC</b> — tuning picked a different model than selection did</sub>
-</td>
-</tr>
-<tr>
-<td align="center" width="50%">
-<img src="docs/plots/confusion_matrices.png" width="100%"><br>
-<sub><b>Confusion matrices</b>, each model at its own operating threshold</sub>
-</td>
-<td align="center" width="50%">
-<img src="docs/plots/roc_curves.png" width="100%"><br>
-<sub><b>ROC curves</b>, all four candidates</sub>
-</td>
-</tr>
-<tr>
-<td align="center" width="50%">
-<img src="docs/plots/pr_curves.png" width="100%"><br>
-<sub><b>Precision-recall curves</b> — the metric the selection is actually made on</sub>
-</td>
-<td align="center" width="50%">
-<img src="docs/plots/parallel_coordinates.png" width="100%"><br>
-<sub><b>Six metrics side by side</b>, normalized, parallel coordinates</sub>
-</td>
-</tr>
-</table>
+<p align="center">
+  <img src="docs/plots/model_comparison_performance.png" alt="PR-AUC and Gini per model, out of time" width="49%">
+  <img src="docs/plots/model_comparison_cv_vs_oot.png" alt="CV mean vs out-of-time PR-AUC per tuned candidate" width="49%">
+</p>
+<p align="center">
+  <sub><b>PR-AUC and Gini, out of time</b></sub> &nbsp;·&nbsp;
+  <sub><b>CV mean vs. out-of-time PR-AUC</b> — tuning picked a different model than selection did</sub>
+</p>
+
+<p align="center">
+  <img src="docs/plots/confusion_matrices.png" alt="Confusion matrices at each model's own operating threshold" width="49%">
+  <img src="docs/plots/roc_curves.png" alt="ROC curves for all four models" width="49%">
+</p>
+<p align="center">
+  <sub><b>Confusion matrices</b>, each model at its own operating threshold</sub> &nbsp;·&nbsp;
+  <sub><b>ROC curves</b>, all four candidates</sub>
+</p>
+
+<p align="center">
+  <img src="docs/plots/pr_curves.png" alt="Precision-recall curves for all four models" width="49%">
+  <img src="docs/plots/parallel_coordinates.png" alt="Six metrics normalized, parallel coordinates" width="49%">
+</p>
+<p align="center">
+  <sub><b>Precision-recall curves</b> — the metric the selection is actually made on</sub> &nbsp;·&nbsp;
+  <sub><b>Six metrics side by side</b>, normalized, parallel coordinates</sub>
+</p>
 
 The best model until now is the Optuna-tuned logistic regression — 0.129 PR-AUC and 0.327
 Gini out of time, 2.2× the heuristic baseline on PR-AUC (the metric that matters at a 4.75%
