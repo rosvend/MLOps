@@ -12,14 +12,7 @@ Evidently AI (drift) · Hydra + pydantic (config, everywhere) · uv (dependency 
 
 ## Pipeline
 
-| Stage | What | Where |
-| --- | --- | --- |
-| 1–4 | Ingest, clean, derive features, validate (pandera contract) | `src/data/`, `src/features/`, `src/pipelines/prepare.py` |
-| 5 | Fitted transforms (winsorise, impute, encode) — refit per fold, never globally | `src/features/engineering.py` |
-| 6 | Offline feature store, point-in-time correct | `feature_repo/`, `src/pipelines/features.py` |
-| 7 | Tune 3 candidates + the heuristic baseline, select on a held-out out-of-time window | `src/pipelines/train.py` |
-| 8 | Export the champion, serve it behind a batch API, containerise | `src/pipelines/export_champion.py`, `src/api/` |
-| 9 | Drift detection, request logging, alerting | `src/monitoring/` |
+![Pipeline: raw loan data flows through prep/validation, feature engineering and an offline Feast feature store, into Optuna/MLflow training that exports the best model, which is served behind a FastAPI batch API and watched by Evidently-based drift monitoring that signals back into training.](docs/plots/pipeline_diagram.png)
 
 Full detail per stage in `docs/`: [architecture](docs/architecture.md) ·
 [feature engineering](docs/feature-engineering.md) · [feature store](docs/feature-store.md) ·
@@ -47,18 +40,21 @@ curl -X POST localhost:8000/predict/batch -H 'Content-Type: application/json' -d
 
 ## Results
 
-Out-of-time (train on the oldest 75% of vintages, test on the newest):
+Out-of-time (train on the oldest 75% of vintages, test on the newest) comparison across all
+four candidates — the heuristic baseline, logistic regression, XGBoost and LightGBM:
 
-| Model | Gini | PR-AUC |
-| --- | ---: | ---: |
-| Heuristic scorecard (8 rules, frozen, no fitting) | 0.324 | 0.059 |
-| **Champion — logistic regression** (Optuna-tuned) | **0.327** | **0.129** |
+![PR-AUC and Gini per model, out of time](docs/plots/model_comparison_performance.png)
+![CV mean vs. out-of-time PR-AUC per tuned candidate](docs/plots/model_comparison_cv_vs_oot.png)
+![Confusion matrices at each model's own operating threshold](docs/plots/confusion_matrices.png)
+![ROC curves for all four models](docs/plots/roc_curves.png)
+![Precision-recall curves for all four models](docs/plots/pr_curves.png)
+![Normalized comparison across six metrics, parallel coordinates](docs/plots/parallel_coordinates.png)
 
-The champion is the first model in the project to beat the hand-built baseline on both
-metrics — 2.2× the incumbent on PR-AUC, which is what matters at a 4.75% default rate. It
-was chosen on the held-out window, not cross-validation: the best CV model (XGBoost,
-0.187 CV mean) was the *worst* out-of-time (0.091 PR-AUC) — a reminder that this book has
-real vintage structure a shuffled fold cannot see.
+The best model until now is the Optuna-tuned logistic regression — 0.129 PR-AUC and 0.327
+Gini out of time, 2.2× the heuristic baseline on PR-AUC (the metric that matters at a 4.75%
+default rate). It won on the held-out vintage window, not cross-validation: XGBoost scored
+best in CV (0.187) but worst out of time (0.091), a reminder that this book has real vintage
+structure a shuffled fold can't see.
 
 Full comparison and the reasoning behind the selection protocol in
 [`docs/model-training.md`](docs/model-training.md).
