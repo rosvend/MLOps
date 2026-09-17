@@ -67,8 +67,8 @@ four candidates — the heuristic baseline, logistic regression, XGBoost and Lig
 </p>
 
 <p align="center">
-  <img src="docs/plots/roc_curves.png" alt="ROC curves for all four models" width="49%">
-  <img src="docs/plots/pr_curves.png" alt="Precision-recall curves for all four models" width="49%">
+  <img src="docs/plots/roc_curves.png" alt="ROC curves for all four models" height="240">
+  <img src="docs/plots/pr_curves.png" alt="Precision-recall curves for all four models" height="240">
 </p>
 <p align="center">
   <sub><b>ROC curves</b></sub> &nbsp;·&nbsp;
@@ -76,8 +76,8 @@ four candidates — the heuristic baseline, logistic regression, XGBoost and Lig
 </p>
 
 <p align="center">
-  <img src="docs/plots/model_comparison_cv_vs_oot.png" alt="CV mean vs out-of-time PR-AUC per tuned candidate" width="49%">
-  <img src="docs/plots/parallel_coordinates.png" alt="Six metrics normalized, parallel coordinates" width="49%">
+  <img src="docs/plots/model_comparison_cv_vs_oot.png" alt="CV mean vs out-of-time PR-AUC per tuned candidate" height="240">
+  <img src="docs/plots/parallel_coordinates.png" alt="Six metrics normalized, parallel coordinates" height="240">
 </p>
 <p align="center">
   <sub><b>CV mean vs. out-of-time PR-AUC</b> — tuning picked a different model than selection did</sub> &nbsp;·&nbsp;
