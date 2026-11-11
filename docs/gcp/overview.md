@@ -20,17 +20,16 @@ flowchart LR
     gcs -->|train + evaluate| vtx
     cb -->|push image| ar
     ar -->|training image| vtx
-    gh -.->|docker push| ar
-    ar -.->|deploy| run
-    run -.->|logs| bq
+    gh -->|docker push| ar
+    ar -->|deploy| run
+    run -->|logs| bq
 
     classDef built fill:#e7f6ec,stroke:#2f9e5b
     classDef planned fill:#fff6e0,stroke:#d9a400,stroke-dasharray:4 3
-    class gcs,vtx,cb,ar built
-    class run,bq,gh planned
+    class gcs,vtx,cb,ar,run,bq,gh built
 ```
 
-Solid arrows are built and working. Dashed arrows are planned (Phase 1: CI/CD and deploy).
+Every component is built. GitHub Actions builds the serving image, pushes it to Artifact Registry and deploys it to Cloud Run as a canary; the API writes its prediction log to BigQuery.
 
 ## What each service does
 

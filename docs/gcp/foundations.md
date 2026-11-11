@@ -18,7 +18,7 @@ flowchart LR
 | --- | --- |
 | `google_project_service` | Turns on the APIs the project uses (Vertex AI, Cloud Run, Cloud Build, Artifact Registry, Storage, IAM and others) |
 | `google_storage_bucket` | The private bucket: no public access, uniform access control |
-| `google_billing_budget` | An alert at 50 % and 90 % of a $40 budget. It warns; it does not stop spending |
+| `google_billing_budget` | An alert at 50 % and 90 % of a $100 budget. It warns; it does not stop spending |
 | `google_artifact_registry_repository` | The Docker repository |
 | Service account + workload identity pool | Lets GitHub Actions act in the project without a key file |
 
