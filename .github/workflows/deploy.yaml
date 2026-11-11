@@ -42,6 +42,9 @@ jobs:
   deploy:
     needs: ci
     runs-on: ubuntu-latest
+    env:
+      # Empty on purpose, as in ci.yaml: the Makefile's quota project breaks the federated login.
+      GOOGLE_CLOUD_QUOTA_PROJECT: ""
     steps:
       - uses: actions/checkout@v4
 
