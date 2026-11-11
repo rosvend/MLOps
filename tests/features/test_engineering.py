@@ -24,10 +24,8 @@ def X(sample_source):
 
 
 @pytest.fixture
-def real():
-    from src.data.csv_source import CsvDataSource
-
-    prepared = prepare_labelled(CsvDataSource("data/raw/BD_creditos.csv"))
+def real(real_source):
+    prepared = prepare_labelled(real_source)
     return features(prepared), ~prepared[default_spec().target]
 
 

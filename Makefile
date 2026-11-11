@@ -1,5 +1,8 @@
 .PHONY: install test eda features feast-apply feast-verify score train export-champion export-reference export-gcp-dataset monitor serve tunnel
 
+# Application Default Credentials may carry another project's quota project; bill this one.
+export GOOGLE_CLOUD_QUOTA_PROJECT ?= mlops-roysandoval
+
 install:
 	uv sync
 

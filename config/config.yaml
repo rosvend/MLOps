@@ -1,5 +1,5 @@
 defaults:
-  - data_source: csv
+  - data_source: gcs
   - features: default
   - model: heuristic
   - training: default

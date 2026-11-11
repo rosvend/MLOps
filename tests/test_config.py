@@ -9,7 +9,7 @@ from src.config import CONFIG_DIR, Config, load_config
 def test_the_shipped_config_composes():
     config = load_config()
 
-    assert config.data_source.type == "csv"
+    assert config.data_source.type == "gcs"
     assert config.model.threshold == 4
 
 

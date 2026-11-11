@@ -216,12 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
-# Raw data is committed until DVC takes over versioning
+# Raw data lives in Cloud Storage, never in the repo
 data/*
 !data/README.md
-!data/raw/
-data/raw/*
-!data/raw/BD_creditos.csv
 
 # Trained model artifacts, not model code
 src/models/*.pkl

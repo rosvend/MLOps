@@ -12,10 +12,8 @@ from src.pipelines.prepare import prepare_labelled
 
 
 @pytest.fixture(scope="module")
-def datos():
-    from src.data.csv_source import CsvDataSource
-
-    p = prepare_labelled(CsvDataSource("data/raw/BD_creditos.csv"))
+def datos(real_source):
+    p = prepare_labelled(real_source)
     return features(p), ~p[default_spec().target]
 
 

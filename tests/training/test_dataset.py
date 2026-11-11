@@ -17,11 +17,10 @@ pytestmark = pytest.mark.skipif(
 
 
 @pytest.fixture(scope="module")
-def datos():
-    from src.data.csv_source import CsvDataSource
+def datos(real_source):
     from src.models.dataset import load_from_feast
 
-    return load_from_feast(CsvDataSource("data/raw/BD_creditos.csv"), default_spec())
+    return load_from_feast(real_source, default_spec())
 
 
 def test_features_come_back_from_the_store(datos, spec_fixture=None):

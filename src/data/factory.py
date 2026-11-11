@@ -1,8 +1,9 @@
 from src.config import DataSourceConfig
 from src.data.csv_source import CsvDataSource
+from src.data.gcs_source import GcsDataSource
 from src.data.source import DataSource
 
-SOURCES = {"csv": CsvDataSource}
+SOURCES = {"csv": CsvDataSource, "gcs": GcsDataSource}
 
 
 def build_source(config: DataSourceConfig) -> DataSource:

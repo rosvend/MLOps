@@ -25,10 +25,8 @@ def champion():
 
 
 @pytest.fixture(scope="module")
-def crudo():
-    from src.data.csv_source import CsvDataSource
-
-    return CsvDataSource("data/raw/BD_creditos.csv").read()
+def crudo(real_source):
+    return real_source.read()
 
 
 def _payload(fila: pd.Series, idx: int) -> dict:

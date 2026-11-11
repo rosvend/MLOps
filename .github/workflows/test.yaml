@@ -26,8 +26,6 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Build the feature store
-        run: make feast-apply
-
+      # Real-data tests skip without GCP credentials; restore feast-apply after Workload Identity Federation.
       - name: Run tests
         run: uv run pytest

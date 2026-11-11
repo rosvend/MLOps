@@ -47,7 +47,7 @@ Full detail per stage in `docs/`: [architecture](docs/architecture.md) ·
 - Python 3.11+
 - Docker & Docker Compose
 - uv
-- Git & DVC
+- Git & the `gcloud` CLI
 
 ### 1. Clone & install
 
@@ -56,13 +56,13 @@ git clone https://github.com/rosvend/mlops.git
 cd mlops-pipeline
 uv sync
 ```
-### 2. Initialise DVC
+### 2. Authenticate to GCP
+
+The raw loans live in Cloud Storage (`gs://mlops-roysandoval-data/raw/BD_creditos.csv`), not in the repo.
 
 ```bash
-dvc init
-dvc add data/raw
-git add data/raw.dvc .gitignore
-git commit -m "chore: track raw data with DVC"
+gcloud auth application-default login
+export GOOGLE_CLOUD_QUOTA_PROJECT=mlops-roysandoval   # the Makefile sets this by default
 ```
 ### 3. Run the full pipeline
 
