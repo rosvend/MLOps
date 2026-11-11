@@ -68,3 +68,6 @@ score:
 
 tunnel:
 	./scripts/setup_tunnel.sh
+
+register-model:
+	uv run python -m src.gcp.register $(RUN_DIR) $(CANDIDATE)

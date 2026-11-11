@@ -27,3 +27,7 @@ def read_json(uri: str, client=None) -> dict:
 
 def write_json(uri: str, obj: dict, client=None) -> None:
     _blob(uri, client).upload_from_string(json.dumps(obj, indent=2), content_type="application/json")
+
+
+def write_bytes(uri: str, data: bytes, content_type: str = "application/octet-stream", client=None) -> None:
+    _blob(uri, client).upload_from_string(data, content_type=content_type)

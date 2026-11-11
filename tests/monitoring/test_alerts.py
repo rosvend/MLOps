@@ -7,14 +7,14 @@ import httpx
 import pytest
 
 from src.monitoring.alerts import send_alert
-from src.monitoring.spec import MonitoringSpec
+from src.monitoring.spec import MonitoringSpec, PredictionsLogSpec
 
 
 @pytest.fixture
 def spec(tmp_path):
     return MonitoringSpec(
         reference_path="models/reference_data.parquet",
-        predictions_db_path="data/monitoring/predictions.db",
+        predictions_log=PredictionsLogSpec(type="sqlite", sqlite_path="data/monitoring/predictions.db", bigquery_dataset="d", bigquery_table="t"),
         drift_share_threshold=0.3,
         flagged_share_threshold=0.25,
         numeric_sample_size_cutoff=1000,

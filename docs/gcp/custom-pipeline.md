@@ -35,8 +35,21 @@ Choices worth knowing:
   live inside the sklearn pipeline, so they are fitted on the training rows only.
 - **Threshold.** F1, precision and recall use the same rule as the local evaluation: flag the
   15.7 % highest-scored loans of the TEST window.
-- **Model Registry: skipped.** Registering needs a saved model artifact and a serving container
-  mapping; that is more machinery than this comparison needs.
+- **Serving artifacts.** Each candidate step also saves the fitted model so the cloud model can be
+  deployed instead of the local one (`src/gcp/artifacts.py`). Layout, per candidate:
+  `<run_dir>/models/<name>/champion.joblib`, `champion.meta.json` and `reference_data.parquet`.
+  They have the same format as `make export-champion` / `make export-reference`: the threshold is
+  the 84.3 % score quantile (flagged share 0.157) on the training rows, frozen at fit; the meta
+  carries the Vertex run id (`vertex_pipeline_run_id`) and the git sha (a pipeline parameter set by
+  `submit.py`) instead of the MLflow ids; the reference is the training features plus
+  `probability_default`, `review_flag` and `defaulted`, with the nullable dtypes restored.
+- **Experiments.** The job is submitted with the experiment `loan-default` (`experiment` in the
+  config), and after the run `src/gcp/experiments.py` logs one experiment run per candidate
+  (`<name>-<run id>`) with its tuned params and all metrics, so they compare side by side in
+  Vertex AI > Experiments.
+- **Versions.** The joblib is a pickled sklearn pipeline, so `docker/requirements-train.txt` pins
+  scikit-learn, numpy, pandas and joblib to the versions the `serving` group resolves to in
+  `uv.lock` (1.9.0, 2.5.2, 2.3.3, 1.5.3); `pyarrow` is pinned to write the parquet.
 
 ## GCP services involved
 
@@ -90,6 +103,27 @@ Against the local champion (logistic, PR-AUC 0.129, Gini 0.327; baseline heurist
   are in practice the same 7,713 loans and the results match.
 - Latency is higher than locally (about 80 vs 13 ms per 1k rows) because it was measured on a
   small shared cloud VM right after container start; it is not a model property.
+
+## Latest run (with artifacts)
+
+Run `run-20261111-141822`, job `loan-default-custom-run-20261111-141822`, succeeded in about 6
+minutes. Same metrics as above (logistic PR-AUC 0.1293). Logistic artifacts:
+
+- `gs://mlops-roysandoval-data/pipeline-runs/run-20261111-141822/models/logistic/champion.joblib`
+- `gs://mlops-roysandoval-data/pipeline-runs/run-20261111-141822/models/logistic/champion.meta.json`
+- `gs://mlops-roysandoval-data/pipeline-runs/run-20261111-141822/models/logistic/reference_data.parquet`
+
+Checked after downloading them: the model loads with joblib, PR-AUC on the 3,050 TEST rows is
+0.12928, the threshold is 0.082282 (equal to the local one), the meta keys and features match the
+local file (only the run ids differ) and the reference has the same 38 columns and dtypes.
+
+Experiment `loan-default`: Vertex AI > Experiments, region us-central1 (project
+`mlops-roysandoval`); it holds the pipeline run plus the `logistic-`, `xgboost-` and
+`lightgbm-run-20261111-141822` runs. The first submit of this version failed before creating a job
+(`PipelineJob.run` has no `experiment` argument; `submit(experiment=...)` is used instead). Logging
+the candidate runs was interrupted by a power loss and was done afterwards from the saved metrics.
+Creating the experiment also created an empty Vertex Tensorboard instance, which costs nothing
+until it holds data.
 
 ## Cost
 

@@ -30,6 +30,7 @@ class PipelineSpec(BaseModel):
     dataset_uri: str
     runs_prefix: str
     pipeline_name: str
+    experiment: str
     image: str
     cpu: str
     memory: str

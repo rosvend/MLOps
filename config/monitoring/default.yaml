@@ -1,7 +1,14 @@
 # Drift detection, alerting and request logging. Nothing tunable lives in Python.
 
 reference_path: models/reference_data.parquet
-predictions_db_path: data/monitoring/predictions.db
+
+# Where scored requests are logged. type: sqlite (local default) or bigquery (Cloud Run).
+# The env var PREDICTIONS_LOG_TYPE overrides type, so the image needs no YAML edit.
+predictions_log:
+  type: sqlite
+  sqlite_path: data/monitoring/predictions.db
+  bigquery_dataset: mlops_monitoring
+  bigquery_table: predictions
 
 # Overall dataset drift: fraction of features that must show significant drift before
 # the dataset itself is flagged. Matches the alerting spec's ">30% of features".

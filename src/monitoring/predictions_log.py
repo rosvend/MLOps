@@ -9,10 +9,21 @@ import json
 import sqlite3
 import threading
 from pathlib import Path
+from typing import Protocol
 
 import pandas as pd
 
+from src.monitoring.spec import PredictionsLogSpec
+
 _TABLE = "predictions"
+
+
+class PredictionsStore(Protocol):
+    """What callers need from any predictions log."""
+
+    def append(self, records: list[dict]) -> None: ...
+
+    def read_all(self) -> pd.DataFrame: ...
 
 
 class PredictionsLog:
@@ -59,3 +70,20 @@ class PredictionsLog:
 
 def _jsonable(record: dict) -> dict:
     return {k: (bool(v) if isinstance(v, bool) else v) for k, v in record.items()}
+
+
+def _bigquery_client():
+    from google.cloud import bigquery
+
+    return bigquery.Client()
+
+
+def build_predictions_log(spec: PredictionsLogSpec, root: Path = Path(".")) -> PredictionsStore:
+    if spec.type == "bigquery":
+        from src.monitoring.bigquery_log import BigQueryPredictionsLog
+
+        cliente = _bigquery_client()
+        return BigQueryPredictionsLog(
+            cliente, f"{cliente.project}.{spec.bigquery_dataset}.{spec.bigquery_table}"
+        )
+    return PredictionsLog(root / spec.sqlite_path)

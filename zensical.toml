@@ -23,6 +23,8 @@ nav = [
     { "Training on Vertex AI" = "gcp/training.md" },
     { "Custom pipeline run" = "gcp/custom-pipeline.md" },
     { "AutoML run" = "gcp/automl.md" },
+    { "Model Registry" = "gcp/model-registry.md" },
+    { "Prediction log" = "gcp/prediction-log.md" },
     { "CI/CD" = "gcp/cicd.md" },
     { "Design decisions" = "gcp/decisions.md" },
   ] },

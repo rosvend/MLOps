@@ -1,0 +1,30 @@
+# Vertex AI Model Registry: what a registered model looks like.
+
+project: mlops-roysandoval
+region: us-central1
+display_name: loan-default-scorer
+description: Loan default scorer trained by the custom Vertex pipeline.
+
+serving:
+  image_repo: us-central1-docker.pkg.dev/mlops-roysandoval/mlops/scoring-api
+  image_tag: latest
+  predict_route: /predict/batch
+  health_route: /health
+  port: 8000
+
+# Files the pipeline writes per candidate under <run_dir>/models/<candidate>/.
+artifacts:
+  models_dir: models
+  meta_file: champion.meta.json
+
+labels:
+  git_sha: git_sha
+  run_id: run_id
+  candidate: candidate
+
+aliases:
+  challenger: challenger
+  champion: champion
+
+# Metrics (from the meta json) written into the version description.
+description_metrics: [pr_auc, gini, roc_auc]

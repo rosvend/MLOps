@@ -20,6 +20,14 @@ class BatchSpec(BaseModel):
     key_column: str
 
 
+class ImputationSpec(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_uri: str
+    train_value: str
+    missing_label: str
+
+
 class AutomlSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -37,6 +45,7 @@ class AutomlSpec(BaseModel):
     budget_milli_node_hours: int
     early_stopping: bool
     batch: BatchSpec
+    imputation: ImputationSpec | None = None
     categorical: list[str]
     numeric: list[str]
 
@@ -60,6 +69,10 @@ class AutomlSpec(BaseModel):
         return {c: "categorical" for c in self.categorical} | {c: "numeric" for c in self.numeric}
 
 
+def load_automl_spec(path: Path = AUTOML_PATH) -> AutomlSpec:
+    return AutomlSpec(**yaml.safe_load(Path(path).read_text(encoding="utf-8")))
+
+
 @lru_cache(maxsize=1)
 def default_automl_spec() -> AutomlSpec:
-    return AutomlSpec(**yaml.safe_load(AUTOML_PATH.read_text(encoding="utf-8")))
+    return load_automl_spec()
