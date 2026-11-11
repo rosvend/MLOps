@@ -7,6 +7,10 @@ on:
       reason:
         description: Why you are retraining (shown in the summary)
         default: manual run
+      force_promote:
+        description: Send the candidate to approval even if the gate says keep (a human still must approve)
+        type: boolean
+        default: false
   schedule:
     - cron: "0 6 * * 1" # Mondays, 06:00 UTC
   repository_dispatch:
@@ -131,7 +135,7 @@ jobs:
 
   promote:
     needs: [train, gate]
-    if: needs.gate.outputs.decision == 'promote'
+    if: needs.gate.outputs.decision == 'promote' || inputs.force_promote
     runs-on: ubuntu-latest
     # A required reviewer on this environment is the human approval.
     environment: production
@@ -140,6 +144,10 @@ jobs:
       id-token: write
       actions: write
     steps:
+      - name: Note a forced run
+        if: needs.gate.outputs.decision != 'promote'
+        run: echo "Forced to approval by the force_promote input; the gate said keep." >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/checkout@v4
 
       - uses: google-github-actions/auth@v2
