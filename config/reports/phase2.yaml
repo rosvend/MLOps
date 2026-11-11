@@ -1,0 +1,60 @@
+# Phase 2 results report: where every input lives and how the comparison is made. No code reads a path from anywhere else.
+
+split_csv: data/gcp/loans_split.csv
+label_column: defaulted
+split_column: split
+test_value: TEST
+
+flagged_share: 0.157       # same operating point as src/pipelines/train.py
+n_boot: 1000
+seed: 42
+primary_metric: pr_auc
+reference_entry: local_logistic   # paired-difference intervals are measured against this one
+
+# Local MLflow artifacts (make train) and the Vertex custom-pipeline models fetched from GCS.
+local_models:
+  logistic: mlartifacts/models/m-618c42efeca5441e87f1b5e68c9d224e/artifacts/model.pkl
+  xgboost: mlartifacts/models/m-1a5314e2abfb4ba49771cae8b9482054/artifacts/model.pkl
+  lightgbm: mlartifacts/models/m-b128ca826a0b4c60ad57fd0c5393773a/artifacts/model.pkl
+cloud_models_uri: gs://mlops-roysandoval-data/pipeline-runs/run-20261111-141822/models
+automl_output_uri: gs://mlops-roysandoval-data/automl/batch/output
+fetch_dir: outputs/phase2_fetch    # scratch copy of the GCS files; safe to delete
+automl_key_column: row_id
+
+# One row per scored model. `column` is its name in the predictions cache.
+entries:
+  - {id: local_logistic,    label: Logistic,     platform: local,           probabilistic: true}
+  - {id: local_xgboost,     label: XGBoost,      platform: local,           probabilistic: true}
+  - {id: local_lightgbm,    label: LightGBM,     platform: local,           probabilistic: true}
+  - {id: local_heuristic,   label: Heuristic,    platform: local,           probabilistic: false}
+  - {id: cloud_logistic,    label: Logistic,     platform: vertex_pipeline, probabilistic: true}
+  - {id: cloud_xgboost,     label: XGBoost,      platform: vertex_pipeline, probabilistic: true}
+  - {id: cloud_lightgbm,    label: LightGBM,     platform: vertex_pipeline, probabilistic: true}
+  - {id: automl_v1,         label: AutoML v1,    platform: automl,          probabilistic: true}
+  - {id: automl_v2,         label: AutoML v2,    platform: automl,          probabilistic: true, optional: true}
+
+platforms:
+  local: Local Python
+  vertex_pipeline: Vertex custom pipeline
+  automl: Vertex AutoML
+
+automl_batch_glob:       # directory-name patterns inside automl_output_uri
+  automl_v1: "prediction-loans-automl-v1-*"
+  automl_v2: "prediction-loans-automl-v2*"
+
+sources:
+  champion_json: reports/champion.json
+  custom_pipeline_json: reports/gcp/custom_pipeline_metrics.json
+  automl_v1_json: reports/gcp/automl_metrics.json
+  automl_v2_json: reports/gcp/automl_v2_metrics.json
+  time_folds_csv: docs/investigation/results/noise_folds_time.csv
+  noise_ci_csv: docs/investigation/results/noise_ci.csv
+
+noise_floor: 0.01          # gains below this are noise (docs/investigation/model-signal.md)
+
+outputs:
+  predictions_cache: reports/gcp/phase2_predictions.csv
+  tables_json: reports/gcp/phase2_tables.json
+  results_md: docs/gcp/results.md
+  results_template: src/reports/results.template.md
+  plots_dir: docs/gcp/plots

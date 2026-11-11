@@ -247,7 +247,7 @@ data/monitoring/
 mlflow.db
 mlartifacts/
 mlruns/
-reports/
+/reports/
 
 #terraform
 infra/.terraform/
