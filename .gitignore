@@ -251,3 +251,8 @@ mlflow.db
 mlartifacts/
 mlruns/
 reports/
+
+#terraform
+infra/.terraform/
+infra/*.tfstate*
+infra/terraform.tfvars

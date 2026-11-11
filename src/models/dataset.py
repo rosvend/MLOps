@@ -73,13 +73,16 @@ def load_from_feast(source: DataSource, spec: FeatureSpec) -> Dataset:
     return Dataset(X=X, y=y, vintage=vintage)
 
 
+def vintage_cutoff(vintage: pd.Series, fraction: float) -> str:
+    """First vintage whose cumulative share of loans reaches the fraction; older ones are in."""
+    meses = sorted(vintage.unique())
+    acumulado = vintage.value_counts().reindex(meses).cumsum() / len(vintage)
+    return next((m for m in meses if acumulado[m] >= fraction), meses[-1])
+
+
 def split_out_of_time(datos: Dataset, split: Split) -> OutOfTime:
     """Oldest vintages train; every test loan is originated no earlier than every train loan."""
-    meses = sorted(datos.vintage.unique())
-    acumulado = datos.vintage.value_counts().reindex(meses).cumsum() / len(datos)
-    corte = next(
-        (m for m in meses if acumulado[m] >= split.train_fraction), meses[-1]
-    )
+    corte = vintage_cutoff(datos.vintage, split.train_fraction)
     es_train = datos.vintage < corte
     if not es_train.any() or es_train.all():
         raise ValueError(f"el corte {corte} deja un lado vacío")

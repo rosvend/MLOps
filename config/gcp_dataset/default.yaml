@@ -1,0 +1,11 @@
+# Training file for Vertex AI. The test window is the same one the local champion is read on.
+
+split_column: split
+label_column: defaulted
+# Vertex's predefined-split column accepts exactly these labels.
+train_value: TRAIN
+validation_value: VALIDATE
+test_value: TEST
+# Newest slice of the training window, kept as validation so AutoML never tunes on the test window.
+validation_fraction: 0.15
+output_path: data/gcp/loans_split.csv

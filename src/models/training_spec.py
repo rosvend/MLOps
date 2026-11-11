@@ -127,6 +127,26 @@ def default_training_spec() -> TrainingSpec:
     return TrainingSpec(**yaml.safe_load(TRAINING_PATH.read_text(encoding="utf-8")))
 
 
+class GcpDatasetSpec(BaseModel):
+    """The file Vertex AutoML and the custom pipeline both train from."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    split_column: str
+    label_column: str
+    train_value: str
+    validation_value: str
+    test_value: str
+    validation_fraction: float
+    output_path: str
+
+    @model_validator(mode="after")
+    def _validation_is_a_slice_of_train(self):
+        if not 0.05 <= self.validation_fraction <= 0.4:
+            raise ValueError(f"gcp_dataset.validation_fraction fuera de rango: {self.validation_fraction}")
+        return self
+
+
 class ServingSpec(BaseModel):
     """Where the scoring artifact lives and how large a batch may be."""
 

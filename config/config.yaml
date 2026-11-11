@@ -5,4 +5,5 @@ defaults:
   - training: default
   - serving: default
   - monitoring: default
+  - gcp_dataset: default
   - _self_

@@ -1,4 +1,4 @@
-.PHONY: install test eda features feast-apply feast-verify score train export-champion export-reference monitor serve tunnel
+.PHONY: install test eda features feast-apply feast-verify score train export-champion export-reference export-gcp-dataset monitor serve tunnel
 
 install:
 	uv sync
@@ -26,6 +26,9 @@ export-champion:
 
 export-reference: export-champion
 	uv run python -m src.pipelines.export_reference
+
+export-gcp-dataset:
+	uv run python -m src.pipelines.export_gcp_dataset
 
 monitor: export-reference
 	uv run python -m src.pipelines.monitor
