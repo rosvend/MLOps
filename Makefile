@@ -1,4 +1,4 @@
-.PHONY: publish-champion fetch-champion install test eda features feast-apply feast-verify score train export-champion export-reference export-gcp-dataset build-train-image gcp-pipeline docs-build docs-serve monitor serve tunnel
+.PHONY: publish-champion fetch-champion check-metrics install test eda features feast-apply feast-verify score train export-champion export-reference export-gcp-dataset build-train-image gcp-pipeline docs-build docs-serve monitor serve tunnel
 
 # Application Default Credentials may carry another project's quota project; bill this one.
 export GOOGLE_CLOUD_QUOTA_PROJECT ?= mlops-roysandoval
@@ -47,6 +47,9 @@ publish-champion:
 fetch-champion:
 	mkdir -p models
 	gcloud storage cp "$(CHAMPION_URI)/*" models/
+
+check-metrics:
+	uv run python -m src.ci.check_metrics
 
 docs-build:
 	uv run --group docs zensical build --clean

@@ -1,0 +1,26 @@
+# Paths that must exist at the repo root; a trailing slash marks a folder.
+required:
+  - README.md
+  - CLAUDE.md
+  - Makefile
+  - pyproject.toml
+  - uv.lock
+  - config/
+  - config/serving/
+  - config/training/
+  - config/ci/
+  - src/
+  - src/api/
+  - src/data/
+  - src/features/
+  - src/models/
+  - src/monitoring/
+  - src/pipelines/
+  - src/ci/
+  - tests/
+  - docker/Dockerfile
+  - docs/
+  - infra/
+  - feature_repo/
+  - .github/workflows/ci.yaml
+  - .github/workflows/deploy.yaml
