@@ -34,7 +34,7 @@ permissions:
 
 env:
   GOOGLE_CLOUD_PROJECT: ${{ vars.GCP_PROJECT_ID }}
-  GOOGLE_CLOUD_QUOTA_PROJECT: ${{ vars.GCP_PROJECT_ID }}
+  GOOGLE_CLOUD_QUOTA_PROJECT: ""  # empty on purpose: the federated identity may not bill a quota project
   IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/mlops/train
   CHAMPION_URI: gs://mlops-roysandoval-data/models/champion
   REASON: ${{ inputs.reason || github.event.client_payload.reason || github.event_name }}
