@@ -1,0 +1,3 @@
+model,flagged_overlap_with_raw,ties_share_at_cut
+Platt (sigmoid),0.927536231884058,0.0
+isotonic,0.8927536231884058,0.014792899408284023

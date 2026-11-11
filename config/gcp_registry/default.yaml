@@ -7,7 +7,7 @@ description: Loan default scorer trained by the custom Vertex pipeline.
 
 serving:
   image_repo: us-central1-docker.pkg.dev/mlops-roysandoval/mlops/scoring-api
-  image_tag: latest
+  image_tag: cloud-1
   predict_route: /predict/batch
   health_route: /health
   port: 8000

@@ -29,6 +29,9 @@ nav = [
     { "Training workflow" = "gcp/training-workflow.md" },
     { "Design decisions" = "gcp/decisions.md" },
   ] },
+  { "Analysis" = [
+    { "Why the signal is weak" = "investigation/model-signal.md" },
+  ] },
 ]
 
 [project.markdown_extensions]
