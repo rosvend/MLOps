@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      # Empty on purpose: the Makefile's quota project would make the federated identity bill the project, which it may not.
+      GOOGLE_CLOUD_QUOTA_PROJECT: ""
+      # Forks and Dependabot get no id-token, so the cloud steps are skipped for them.
+      CLOUD: ${{ github.event.pull_request.head.repo.fork != true && github.actor != 'dependabot[bot]' }}
+    steps:
+      - name: Clone the repository
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - run: uv sync --group gcp
+
+      - name: Sign in to Google Cloud
+        if: env.CLOUD == 'true'
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - if: env.CLOUD == 'true'
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build the feature store from the raw loans
+        if: env.CLOUD == 'true'
+        run: make feast-apply
+
+      - name: Download the champion model
+        if: env.CLOUD == 'true'
+        run: make fetch-champion
+
+      - name: Validate the folder structure
+        run: uv run pytest tests/test_repo_structure.py -q
+
+      - name: Validate the evaluation metrics
+        if: env.CLOUD == 'true'
+        run: make check-metrics
+
+      - name: Run the tests
+        run: uv run pytest
+
+  notify:
+    # Runs on the CI's own triggers; when deploy.yaml calls this file it sends its own message.
+    if: always() && github.workflow == 'CI'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Summarise and notify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESULT: ${{ needs.test.result }}
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          body="CI **${RESULT}** for ${SHA:0:7} ([run log](${RUN_URL}))"
+          echo "$body" >> "$GITHUB_STEP_SUMMARY"
+          # A commit comment makes GitHub email the commit author; fork PRs have a read-only token.
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${SHA}/comments" -f body="$body" > /dev/null \
+            || echo "::warning::could not post the commit comment"

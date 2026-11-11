@@ -46,24 +46,110 @@ Cloud Run keeps every deployment as a numbered revision.
 3. If healthy, move to 100 %. If not, send traffic back to the previous revision, which takes
    seconds.
 
+## The CI workflow
+
+File: `.github/workflows/ci.yaml`. It runs on every pull request, on every push to `main`, and
+when another workflow calls it (`workflow_call`, used by the deploy workflow).
+
+```mermaid
+flowchart LR
+    a["Clone repo"] --> b["Python + uv<br/>uv sync"]
+    b --> c["Sign in to GCP"]
+    c --> d["make feast-apply"]
+    d --> e["make fetch-champion"]
+    e --> f["Validate folder structure"]
+    f --> g["Validate metrics"]
+    g --> h["pytest"]
+    h --> n["notify<br/>always runs"]
+```
+
+| Step | What it does and why |
+| --- | --- |
+| Clone the repository | `actions/checkout`: the runner starts empty, so the first step fetches the code |
+| Python, uv, `uv sync --group gcp` | Installs the exact dependencies from `uv.lock`, including the GCP group some tests import |
+| Sign in to GCP | Workload Identity Federation; no key file. Needed so the tests that read the real loans can run |
+| `make feast-apply` | Rebuilds the features and the feature store from the raw loans in the bucket |
+| `make fetch-champion` | Downloads the champion model and its metadata into `models/` |
+| Validate folder structure | `tests/test_repo_structure.py` checks every path listed in `config/ci/repo_structure.yaml` exists |
+| Validate metrics | `make check-metrics` reads `models/champion.meta.json` and fails if PR-AUC or Gini are below `config/ci/metric_thresholds.yaml`, or if the file is malformed |
+| pytest | The full test suite |
+| notify | See below |
+
+**Forks.** A pull request from a fork gets no identity token, so signing in would fail the whole
+run. The job computes `CLOUD` (false for forks and Dependabot) and skips every cloud step
+for them: the structure check and the tests that need no cloud still run. The metrics check needs the
+champion, so it is skipped there too.
+
+**Changing the rules.** To require a new folder, add a line to `repo_structure.yaml`. To tighten
+the metric floor, edit `metric_thresholds.yaml`. No code changes.
+
+### The notification
+
+The `notify` job `needs` the test job and has `if: always()`, so it runs whether tests passed or
+failed. It does two things:
+
+1. Writes a short result to the run's **job summary** (the page you see in GitHub Actions).
+2. Posts the result as a **commit comment** with `gh api`. GitHub emails the commit author when
+   someone comments on their commit, so this is the email notification, with no mail server.
+
+When deploy calls CI, CI's notify is skipped (`github.workflow == 'CI'` is false inside a called
+workflow) so one run sends one message.
+
+## The CD workflow
+
+File: `.github/workflows/deploy.yaml`. It runs on a push to `main` that touches serving code or
+configuration (path filters), by hand (`workflow_dispatch`), or when another workflow calls it
+(`workflow_call`), for example the training workflow after a model promotion. A change to `docs/**`
+or `README.md` matches no filter, so nothing deploys.
+
+```mermaid
+flowchart TB
+    ci["CI (reused workflow)"] --> img["Build image<br/>tag = commit SHA, push"]
+    img --> dep["Deploy revision<br/>no traffic, tag candidate"]
+    dep --> s1["Smoke test candidate URL"]
+    s1 --> p10["10 % of traffic"]
+    p10 --> s2["Smoke test again"]
+    s2 --> p100["100 % of traffic"]
+    p100 --> s3["Final check"]
+    s1 -. failure .-> rb["Roll back to previous revision"]
+    s2 -. failure .-> rb
+    s3 -. failure .-> rb
+    s3 --> n["notify"]
+    rb --> n
+```
+
+Plain-language notes:
+
+- **Image tag = commit SHA.** Every image traces to the commit that built it, and a tag is never reused.
+- **`--no-traffic --tag candidate`.** Cloud Run creates the revision but sends it no users. The tag gives it
+  its own URL (`candidate---scoring-api-...`) to test in isolation.
+- **ID token.** The service is private. The workflow asks Google for a short-lived token proving it
+  is `github-ci`, with the service URL as audience, and sends it as `Authorization: Bearer`.
+- **Smoke test.** `scripts/smoke_test.sh` calls `GET /health` (must say `ok` with the model loaded)
+  and `POST /predict/batch` with the sample loan in `config/ci/smoke_request.json`.
+- **Canary.** 10 % of real requests go to the new revision, the checks run again, then it takes 100 %.
+- **Rollback.** A final step runs only `if: failure()`: it sends 100 % of traffic back to the revision
+  that served before the deploy. The run still ends red. Previous and new revision names are in the job summary.
+- **`concurrency`.** Two deploys never run at once.
+
 ## Mapping to the assignment's Jenkinsfile
 
 | Assignment requirement | GitHub Actions equivalent |
 | --- | --- |
 | Install Jenkins | Not needed; GitHub hosts the runners |
-| `Jenkinsfile` | `.github/workflows/*.yaml` |
+| `Jenkinsfile` | `.github/workflows/ci.yaml` and `deploy.yaml` |
 | First step: clone the repo | `actions/checkout` |
-| Tests, folder structure, metrics | Test job, a structure test and a metrics threshold check |
+| Tests, folder structure, metrics | `tests/test_repo_structure.py`, `make check-metrics`, `pytest` |
 | Automatic trigger on merge | `on: push` to `main` |
-| Notification at the end | A final step that always runs |
+| Notification at the end | `notify` job (`if: always()`): job summary and commit comment (email) |
 
 ## Status
 
 | Piece | Status |
 | --- | --- |
-| Tests on push and PR | Built (pytest only) |
-| Folder-structure and metric checks | Planned |
+| CI: tests, folder-structure check, metric check | Built |
+| Notification (job summary and commit comment) | Built |
 | Workload Identity Federation and the CI identity's permissions | Built |
-| Image build, push and Cloud Run deploy | Planned |
-| Promotion gate and approval | Planned |
+| CD: image build, canary deploy, smoke tests, rollback | Built, first real run happens after merging to `main` |
+| Training workflow, promotion gate and approval | Planned |
 | Scheduled drift check | Planned |

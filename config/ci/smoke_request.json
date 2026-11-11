@@ -1,0 +1,4 @@
+{"records": [{"application_id": "SMOKE-TEST", "tipo_credito": "9", "capital_prestado": 4200000,
+  "plazo_meses": 24, "edad_cliente": 23, "tipo_laboral": "Independiente", "salario_cliente": 1200000,
+  "total_otros_prestamos": 3500000, "cuota_pactada": 390000, "puntaje_datacredito": 680,
+  "cant_creditosvigentes": 7, "huella_consulta": 11, "tendencia_ingresos": "Decreciente"}]}

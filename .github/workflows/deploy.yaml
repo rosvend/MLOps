@@ -1,0 +1,148 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/api/**"
+      - "src/features/**"
+      - "src/models/**"
+      - "src/monitoring/**"
+      - "src/data/**"
+      - "config/serving/**"
+      - "config/monitoring/**"
+      - "config/features/**"
+      - "docker/Dockerfile"
+      - "pyproject.toml"
+      - "uv.lock"
+  workflow_dispatch:
+  workflow_call:
+
+# One deploy at a time; a second one waits instead of racing on traffic.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  SERVICE: scoring-api
+  RUNTIME_SA: scoring-api@mlops-roysandoval.iam.gserviceaccount.com
+  IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/mlops/scoring-api:${{ github.sha }}
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yaml
+    permissions:
+      contents: write
+      id-token: write
+
+  deploy:
+    needs: ci
+    runs-on: ubuntu-latest
+    env:
+      # Empty on purpose, as in ci.yaml: the Makefile's quota project breaks the federated login.
+      GOOGLE_CLOUD_QUOTA_PROJECT: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Download the champion model
+        run: make fetch-champion
+
+      - name: Build and push the image
+        run: |
+          gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev" --quiet
+          docker build -f docker/Dockerfile -t "$IMAGE" .
+          docker push "$IMAGE"
+
+      - name: Remember the revision that serves traffic now
+        id: previous
+        run: |
+          prev=$(gcloud run services describe "$SERVICE" --region "${{ vars.GCP_REGION }}" --format=json \
+            | jq -r '.status.traffic | max_by(.percent) | .revisionName')
+          echo "revision=$prev" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy the new revision with no traffic
+        id: candidate
+        run: |
+          gcloud run deploy "$SERVICE" --image "$IMAGE" --region "${{ vars.GCP_REGION }}" \
+            --no-traffic --tag candidate --port 8000 --memory 1Gi --max-instances 2 \
+            --no-allow-unauthenticated --service-account "$RUNTIME_SA" \
+            --set-env-vars PREDICTIONS_LOG_TYPE=bigquery --quiet
+          desc=$(gcloud run services describe "$SERVICE" --region "${{ vars.GCP_REGION }}" --format=json)
+          echo "revision=$(jq -r '.status.latestCreatedRevisionName' <<< "$desc")" >> "$GITHUB_OUTPUT"
+          echo "service_url=$(jq -r '.status.url' <<< "$desc")" >> "$GITHUB_OUTPUT"
+          echo "candidate_url=$(jq -r '.status.traffic[] | select(.tag == "candidate") | .url' <<< "$desc")" >> "$GITHUB_OUTPUT"
+          {
+            echo "- previous revision: \`${{ steps.previous.outputs.revision }}\`"
+            echo "- new revision: \`$(jq -r '.status.latestCreatedRevisionName' <<< "$desc")\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # The service is private, so the smoke tests carry an ID token whose audience is the service URL.
+      - name: Get an ID token for the private service
+        id: token
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: ${{ steps.candidate.outputs.service_url }}
+          id_token_include_email: true
+
+      - name: Smoke-test the candidate
+        env:
+          ID_TOKEN: ${{ steps.token.outputs.id_token }}
+        run: scripts/smoke_test.sh "${{ steps.candidate.outputs.candidate_url }}"
+
+      - name: Send 10 percent of traffic to the new revision
+        env:
+          ID_TOKEN: ${{ steps.token.outputs.id_token }}
+        run: |
+          gcloud run services update-traffic "$SERVICE" --region "${{ vars.GCP_REGION }}" \
+            --to-revisions "${{ steps.candidate.outputs.revision }}=10,${{ steps.previous.outputs.revision }}=90"
+          scripts/smoke_test.sh "${{ steps.candidate.outputs.candidate_url }}"
+          scripts/smoke_test.sh "${{ steps.candidate.outputs.service_url }}"
+
+      - name: Send 100 percent of traffic to the new revision
+        env:
+          ID_TOKEN: ${{ steps.token.outputs.id_token }}
+        run: |
+          gcloud run services update-traffic "$SERVICE" --region "${{ vars.GCP_REGION }}" \
+            --to-revisions "${{ steps.candidate.outputs.revision }}=100"
+          scripts/smoke_test.sh "${{ steps.candidate.outputs.service_url }}"
+          echo "- traffic: 100% on \`${{ steps.candidate.outputs.revision }}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Roll back to the previous revision
+        if: failure() && steps.previous.outputs.revision != ''
+        run: |
+          gcloud run services update-traffic "$SERVICE" --region "${{ vars.GCP_REGION }}" \
+            --to-revisions "${{ steps.previous.outputs.revision }}=100"
+          echo "- rolled back: 100% on \`${{ steps.previous.outputs.revision }}\`" >> "$GITHUB_STEP_SUMMARY"
+
+  notify:
+    if: always()
+    needs: [ci, deploy]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Summarise and notify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_RESULT: ${{ needs.ci.result }}
+          DEPLOY_RESULT: ${{ needs.deploy.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          body="Deploy of ${GITHUB_SHA:0:7}: CI **${CI_RESULT}**, deploy **${DEPLOY_RESULT}** ([run log](${RUN_URL}))"
+          echo "$body" >> "$GITHUB_STEP_SUMMARY"
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -f body="$body" > /dev/null \
+            || echo "::warning::could not post the commit comment"

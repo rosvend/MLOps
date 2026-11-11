@@ -1,0 +1,5 @@
+# Minimums the champion must reach out of time; the README reports PR-AUC 0.129 and Gini 0.327.
+meta_path: models/champion.meta.json
+minimums:
+  pr_auc: 0.12
+  gini: 0.30
