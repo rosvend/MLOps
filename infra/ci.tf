@@ -73,3 +73,78 @@ resource "google_project_iam_member" "ci_use_apis" {
   role    = "roles/serviceusage.serviceUsageConsumer"
   member  = google_service_account.github_ci.member
 }
+
+# --- Workflows that train and deploy: what CI needs beyond building the image ---
+
+# A dedicated identity for Vertex pipeline runs, instead of the broad default compute account.
+resource "google_service_account" "vertex_pipeline" {
+  account_id   = "vertex-pipeline"
+  display_name = "Vertex AI pipeline runs"
+}
+
+resource "google_project_iam_member" "pipeline_vertex" {
+  project = data.google_project.this.project_id
+  role    = "roles/aiplatform.user"
+  member  = google_service_account.vertex_pipeline.member
+}
+
+resource "google_storage_bucket_iam_member" "pipeline_data" {
+  bucket = google_storage_bucket.data.name
+  role   = "roles/storage.objectUser"
+  member = google_service_account.vertex_pipeline.member
+}
+
+resource "google_artifact_registry_repository_iam_member" "pipeline_pull" {
+  repository = google_artifact_registry_repository.mlops.name
+  location   = google_artifact_registry_repository.mlops.location
+  role       = "roles/artifactregistry.reader"
+  member     = google_service_account.vertex_pipeline.member
+}
+
+resource "google_project_iam_member" "pipeline_logs" {
+  project = data.google_project.this.project_id
+  role    = "roles/logging.logWriter"
+  member  = google_service_account.vertex_pipeline.member
+}
+
+# Vertex's service agent must be allowed to run jobs as the pipeline account.
+resource "google_service_account_iam_member" "vertex_agent_acts_as_pipeline" {
+  service_account_id = google_service_account.vertex_pipeline.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:service-${data.google_project.this.number}@gcp-sa-aiplatform-cc.iam.gserviceaccount.com"
+}
+
+# GitHub Actions: submit pipelines and register models.
+resource "google_project_iam_member" "ci_vertex" {
+  project = data.google_project.this.project_id
+  role    = "roles/aiplatform.user"
+  member  = google_service_account.github_ci.member
+}
+
+# GitHub Actions: write candidate models and move the champion in the bucket.
+resource "google_storage_bucket_iam_member" "ci_write_data" {
+  bucket = google_storage_bucket.data.name
+  role   = "roles/storage.objectUser"
+  member = google_service_account.github_ci.member
+}
+
+resource "google_service_account_iam_member" "ci_acts_as_pipeline" {
+  service_account_id = google_service_account.vertex_pipeline.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = google_service_account.github_ci.member
+}
+
+# GitHub Actions: mint an ID token as itself, to smoke-test the private Cloud Run service.
+resource "google_service_account_iam_member" "ci_mints_own_token" {
+  service_account_id = google_service_account.github_ci.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = google_service_account.github_ci.member
+}
+
+resource "google_cloud_run_v2_service_iam_member" "ci_invokes_api" {
+  project  = data.google_project.this.project_id
+  location = var.region
+  name     = "scoring-api"
+  role     = "roles/run.invoker"
+  member   = google_service_account.github_ci.member
+}

@@ -65,7 +65,7 @@ either.
 ## Request logging
 
 Every `/predict/batch` call logs each prediction's engineered features, probability and
-decision to `data/monitoring/predictions.db` - SQLite in WAL mode, safe under concurrent
+decision to `data/monitoring/predictions.db` (or BigQuery on Cloud Run, see `gcp/prediction-log.md`) - SQLite in WAL mode, safe under concurrent
 requests without a database server. Values are stored as JSON per row rather than fixed
 columns, because a request can legitimately omit optional bureau fields and a fixed
 schema would force a null for whatever any single request happened to leave out.

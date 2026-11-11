@@ -55,6 +55,7 @@ serving = [
     # this group excludes (MLflow, XGBoost, LightGBM, Feast) is training-only; this
     # is not - it is a genuine capability of the deployed service.
     "evidently>=0.7.11,<0.7.24",
+    "google-cloud-bigquery>=3.47.0",
 ]
 
 [tool.pytest.ini_options]

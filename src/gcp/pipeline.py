@@ -16,10 +16,10 @@ def build_pipeline(spec: PipelineSpec):
     reference = spec.reference
 
     @dsl.component(base_image=image, install_kfp_package=False)
-    def train_candidate(name: str, run_dir: str):
+    def train_candidate(name: str, run_dir: str, git_sha: str):
         from src.gcp.tasks import run_candidate
 
-        run_candidate(name, run_dir)
+        run_candidate(name, run_dir, git_sha)
 
     @dsl.component(base_image=image, install_kfp_package=False)
     def compare_candidates(run_dir: str, names: list, reference: dict, metric: str):
@@ -28,10 +28,10 @@ def build_pipeline(spec: PipelineSpec):
         run_compare(run_dir, names, reference, metric)
 
     @dsl.pipeline(name=spec.pipeline_name, pipeline_root=f"gs://{spec.bucket}/pipeline-root")
-    def pipeline(run_dir: str):
+    def pipeline(run_dir: str, git_sha: str):
         trained = []
         for name in names:
-            task = train_candidate(name=name, run_dir=run_dir).set_display_name(f"train-{name}")
+            task = train_candidate(name=name, run_dir=run_dir, git_sha=git_sha).set_display_name(f"train-{name}")
             task.set_cpu_limit(spec.cpu).set_memory_limit(spec.memory)
             trained.append(task)
         compare = compare_candidates(run_dir=run_dir, names=names, reference=reference, metric=metric)

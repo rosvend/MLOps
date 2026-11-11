@@ -14,7 +14,7 @@ import pandas as pd
 
 from src.monitoring.alerts import send_alert
 from src.monitoring.drift_detector import DriftSummary, run_drift_report
-from src.monitoring.predictions_log import PredictionsLog
+from src.monitoring.predictions_log import PredictionsStore
 from src.monitoring.spec import MonitoringSpec
 
 _log = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ class LiveDriftResult:
 
 def run_live_drift_check(
     reference: pd.DataFrame,
-    predictions_log: PredictionsLog,
+    predictions_log: PredictionsStore,
     flagged_share_at_fit: float,
     spec: MonitoringSpec,
 ) -> LiveDriftResult:

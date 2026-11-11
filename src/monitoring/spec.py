@@ -5,8 +5,10 @@ src/models/training_spec.py::default_serving_spec - no Hydra, so the API can loa
 without importing a composer it never uses.
 """
 
+import os
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, model_validator
@@ -14,11 +16,20 @@ from pydantic import BaseModel, ConfigDict, model_validator
 SPEC_PATH = Path(__file__).resolve().parents[2] / "config" / "monitoring" / "default.yaml"
 
 
+class PredictionsLogSpec(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["sqlite", "bigquery"]
+    sqlite_path: str
+    bigquery_dataset: str
+    bigquery_table: str
+
+
 class MonitoringSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     reference_path: str
-    predictions_db_path: str
+    predictions_log: PredictionsLogSpec
 
     drift_share_threshold: float
     flagged_share_threshold: float
@@ -57,4 +68,7 @@ class MonitoringSpec(BaseModel):
 
 @lru_cache(maxsize=1)
 def default_monitoring_spec() -> MonitoringSpec:
-    return MonitoringSpec(**yaml.safe_load(SPEC_PATH.read_text(encoding="utf-8")))
+    datos = yaml.safe_load(SPEC_PATH.read_text(encoding="utf-8"))
+    if tipo := os.environ.get("PREDICTIONS_LOG_TYPE"):
+        datos["predictions_log"]["type"] = tipo
+    return MonitoringSpec(**datos)

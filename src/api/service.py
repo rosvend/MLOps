@@ -19,7 +19,7 @@ from src.features.contract import features
 from src.features.derive import add_derived_features
 from src.features.spec import FeatureSpec, default_spec
 from src.models.training_spec import ServingSpec, default_serving_spec
-from src.monitoring.predictions_log import PredictionsLog
+from src.monitoring.predictions_log import PredictionsStore, build_predictions_log
 from src.monitoring.spec import default_monitoring_spec
 
 _log = logging.getLogger(__name__)
@@ -58,9 +58,9 @@ def load_champion(model_path: str, meta_path: str) -> Champion:
 
 
 @lru_cache(maxsize=1)
-def load_predictions_log() -> PredictionsLog:
+def load_predictions_log() -> PredictionsStore:
     """One connection for the life of the process, same lifecycle as the champion."""
-    return PredictionsLog(RAIZ / default_monitoring_spec().predictions_db_path)
+    return build_predictions_log(default_monitoring_spec().predictions_log, RAIZ)
 
 
 def _frame(records: list[dict], champion: Champion) -> pd.DataFrame:
@@ -81,7 +81,7 @@ def score(
     records: list[dict],
     champion: Champion,
     decision_threshold: float | None = None,
-    predictions_log: PredictionsLog | None = None,
+    predictions_log: PredictionsStore | None = None,
 ) -> list[dict]:
     """Probability of default and the decision the frozen threshold makes from it.
 

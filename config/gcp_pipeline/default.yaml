@@ -6,6 +6,7 @@ bucket: mlops-roysandoval-data
 dataset_uri: gs://mlops-roysandoval-data/datasets/loans_split.csv
 runs_prefix: pipeline-runs
 pipeline_name: loan-default-custom
+experiment: loan-default
 image: us-central1-docker.pkg.dev/mlops-roysandoval/mlops/train:latest
 # Vertex picks the smallest machine that satisfies these (about an e2-standard-2); no GPU.
 cpu: "2"

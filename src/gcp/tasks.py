@@ -1,5 +1,6 @@
 """What each pipeline step does, as plain functions the KFP components just call."""
 
+from src.gcp.artifacts import save_artifacts
 from src.gcp.compare import compare
 from src.gcp.data import split_frame
 from src.gcp.evaluate import build_candidate, train_and_evaluate
@@ -12,13 +13,17 @@ def metrics_uri(run_dir: str, name: str) -> str:
     return f"{run_dir}/metrics/{name}.json"
 
 
-def run_candidate(name: str, run_dir: str, client=None) -> dict:
-    """Load the split file, train one candidate on TRAIN+VALIDATE, score TEST, save the metrics."""
+def run_candidate(name: str, run_dir: str, git_sha: str = "unknown", client=None) -> dict:
+    """Train one candidate on TRAIN+VALIDATE, score TEST, save the metrics and serving artifacts."""
     spec, training = default_pipeline_spec(), default_training_spec()
     data = split_frame(read_csv(spec.dataset_uri, client), default_dataset_spec())
     model = build_candidate(training.candidates[name], spec.candidates[name].params, spec.seed)
     result = train_and_evaluate(name, model, data, training.selection.flagged_share)
     write_json(metrics_uri(run_dir, name), result, client)
+    save_artifacts(
+        name, model, data.X_train, data.y_train, result, run_dir,
+        training.selection.flagged_share, git_sha, f"training window (TRAIN+VALIDATE of {spec.dataset_uri})", client,
+    )
     return result
 
 

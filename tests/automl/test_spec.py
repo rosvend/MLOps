@@ -47,3 +47,16 @@ def test_column_cannot_be_both_kinds():
     spec["numeric"] = spec["numeric"] + ["tipo_credito"]
     with pytest.raises(ValidationError):
         type(default_automl_spec())(**spec)
+
+
+def test_imputed_spec_matches_default_features_and_keeps_the_cap():
+    from src.automl.spec import AUTOML_PATH, load_automl_spec
+
+    v1 = default_automl_spec()
+    v2 = load_automl_spec(AUTOML_PATH.with_name("imputed.yaml"))
+    assert v2.column_specs == v1.column_specs
+    assert v2.budget_milli_node_hours == 1000
+    assert v2.dataset_uri.endswith("loans_split_imputed.csv")
+    assert v2.job_display_name == "loans-automl-v2-imputed"
+    assert v2.imputation.source_uri == v1.dataset_uri
+    assert v1.imputation is None

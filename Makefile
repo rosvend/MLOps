@@ -1,4 +1,4 @@
-.PHONY: publish-champion fetch-champion install test eda features feast-apply feast-verify score train export-champion export-reference export-gcp-dataset build-train-image gcp-pipeline docs-build docs-serve monitor serve tunnel
+.PHONY: publish-champion fetch-champion install test eda features feast-apply feast-verify score train export-champion export-reference export-gcp-dataset build-train-image gcp-pipeline docs-build docs-serve monitor serve tunnel register-model
 
 # Application Default Credentials may carry another project's quota project; bill this one.
 export GOOGLE_CLOUD_QUOTA_PROJECT ?= mlops-roysandoval
@@ -65,3 +65,6 @@ score:
 
 tunnel:
 	./scripts/setup_tunnel.sh
+
+register-model:
+	uv run python -m src.gcp.register $(RUN_DIR) $(CANDIDATE)

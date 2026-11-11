@@ -3351,6 +3351,7 @@ gcp = [
 serving = [
     { name = "evidently" },
     { name = "fastapi" },
+    { name = "google-cloud-bigquery" },
     { name = "httpx" },
     { name = "joblib" },
     { name = "numpy" },
@@ -3397,6 +3398,7 @@ gcp = [
 serving = [
     { name = "evidently", specifier = ">=0.7.11,<0.7.24" },
     { name = "fastapi", specifier = ">=0.141.1" },
+    { name = "google-cloud-bigquery", specifier = ">=3.47.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "joblib", specifier = ">=1.5.3" },
     { name = "numpy", specifier = ">=2.5.2" },

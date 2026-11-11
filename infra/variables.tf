@@ -8,7 +8,7 @@ variable "region" {
 
 variable "budget_usd" {
   type    = number
-  default = 40
+  default = 100
 }
 
 variable "apis" {
