@@ -67,6 +67,7 @@ jobs:
         if: steps.check.outputs.drifted == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }} # this job has no checkout, so gh cannot infer the repo
         run: |
           gh workflow run train.yaml --ref main -f reason="drift detected by the daily check"
           echo "Started train.yaml" >> "$GITHUB_STEP_SUMMARY"

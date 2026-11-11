@@ -49,6 +49,11 @@ drift signal that closes the loop back to training.
 
 Green outline is shipped, orange is next in dependency order, dashed grey is later.
 
+!!! note "Status after the move to Google Cloud"
+    The diagram above is the original design and its colours are out of date. The table below is current:
+    raw data and models live in Cloud Storage, training also runs on Vertex AI, the API is deployed on Cloud Run,
+    and the prediction log is in BigQuery. See [Target architecture](gcp/overview.md).
+
 | # | Stage | Tool | Where | Status |
 | --- | --- | --- | --- | --- |
 | 1 | Storage | CSV, later a warehouse | `data/raw/` | shipped |
@@ -58,11 +63,11 @@ Green outline is shipped, orange is next in dependency order, dashed grey is lat
 | 5 | Feature engineering | pandas | `src/features/` | shipped |
 | 6 | Feature store | Feast | `feature_repo/` | shipped (offline only) |
 | 7 | Train | scikit-learn, XGBoost, LightGBM, Optuna | `src/models/`, `src/pipelines/train.py` | shipped |
-| 8 | Track + register | MLflow | `mlflow.db` | tracking shipped, registry next |
-| 9 | Serve | FastAPI + Docker | `src/api/`, `docker/` | shipped (batch) |
+| 8 | Track + register | MLflow locally; Vertex AI Experiments and Model Registry in the cloud | `mlflow.db`, `src/gcp/` | shipped |
+| 9 | Serve | FastAPI + Docker on Cloud Run | `src/api/`, `docker/` | shipped (batch, private) |
 | 10 | Monitor | Evidently | `src/monitoring/` | shipped |
-| — | Versioning | DVC | — | next |
-| — | CI | GitHub Actions | `.github/workflows/` | shipped |
+| — | Data versioning | Cloud Storage object versioning (DVC was not adopted) | `infra/main.tf` | shipped |
+| — | CI/CD | GitHub Actions: CI, canary deploy, training with a gate and approval | `.github/workflows/` | shipped |
 | — | Baseline | heuristic scorecard | `src/models/` | shipped |
 
 ## Storage stays swappable
