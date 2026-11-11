@@ -8,6 +8,8 @@ runs_prefix: pipeline-runs
 pipeline_name: loan-default-custom
 experiment: loan-default
 image: us-central1-docker.pkg.dev/mlops-roysandoval/mlops/train:latest
+# Dedicated identity the pipeline runs as (not the broad default compute account).
+service_account: vertex-pipeline@mlops-roysandoval.iam.gserviceaccount.com
 # Vertex picks the smallest machine that satisfies these (about an e2-standard-2); no GPU.
 cpu: "2"
 memory: 8G

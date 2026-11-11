@@ -1,0 +1,72 @@
+name: Drift check
+
+# Asks the private scoring API whether live traffic drifted, and starts retraining if so.
+on:
+  schedule:
+    - cron: "0 7 * * *" # every day, 07:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  actions: write # to start train.yaml
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Find the service URL
+        id: service
+        run: echo "url=$(gcloud run services describe scoring-api --region "${{ vars.GCP_REGION }}" --format='value(status.url)')" >> "$GITHUB_OUTPUT"
+
+      # The service is private, so the call carries an ID token whose audience is the service URL.
+      - name: Get an ID token for the private service
+        id: token
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: ${{ steps.service.outputs.url }}
+          id_token_include_email: true
+
+      - name: Run the drift check
+        id: check
+        env:
+          ID_TOKEN: ${{ steps.token.outputs.id_token }}
+          URL: ${{ steps.service.outputs.url }}
+        run: |
+          code=$(curl -sS --max-time 300 -o drift.json -w '%{http_code}' -X POST \
+            -H "Authorization: Bearer ${ID_TOKEN}" "${URL}/monitoring/run-drift-check")
+          case "$code" in
+            200)
+              drifted=$(jq -r .dataset_drift_detected drift.json)
+              echo "drifted=$drifted" >> "$GITHUB_OUTPUT"
+              echo "Drift check: drift detected = \`$drifted\`, drift share $(jq -r .drift_share drift.json), rows $(jq -r .current_rows drift.json)" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            409)
+              # Not enough logged predictions yet (min_current_rows): normal, nothing to do.
+              echo "drifted=false" >> "$GITHUB_OUTPUT"
+              echo "Drift check skipped: $(jq -r .detail drift.json)" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            *)
+              echo "::error::drift check returned HTTP $code"
+              cat drift.json
+              exit 1
+              ;;
+          esac
+
+      - name: Start retraining
+        if: steps.check.outputs.drifted == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run train.yaml --ref main -f reason="drift detected by the daily check"
+          echo "Started train.yaml" >> "$GITHUB_STEP_SUMMARY"

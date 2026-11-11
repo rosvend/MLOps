@@ -15,7 +15,7 @@ class SplitData:
     y_test: pd.Series
 
 
-def _bools_to_float(features: pd.DataFrame) -> pd.DataFrame:
+def bools_to_float(features: pd.DataFrame) -> pd.DataFrame:
     """A CSV stores a boolean with gaps as text; the model pipeline wants a number."""
     out = features.copy()
     for col in out.select_dtypes(include="object"):
@@ -35,7 +35,7 @@ def split_frame(frame: pd.DataFrame, ds: GcpDatasetSpec) -> SplitData:
     if not is_test.any() or is_test.all():
         raise ValueError(f"se necesitan filas {ds.test_value} y de entrenamiento")
 
-    features = _bools_to_float(frame.drop(columns=[ds.label_column, ds.split_column]))
+    features = bools_to_float(frame.drop(columns=[ds.label_column, ds.split_column]))
     label = frame[ds.label_column].astype(int)
     train, test = ~is_test, is_test
     return SplitData(

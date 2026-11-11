@@ -1,8 +1,11 @@
 """Compile the pipeline and run it on Vertex AI.
 
-    uv run python -m src.gcp.submit
+    uv run python -m src.gcp.submit [--image-tag TAG]
+
+Prints a final `run_dir=gs://...` line so CI can pick the run up.
 """
 
+import argparse
 import subprocess
 import tempfile
 from datetime import datetime, timezone
@@ -27,21 +30,35 @@ def git_sha() -> str:
         return "unknown"
 
 
-def main() -> None:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--image-tag", help="training image tag to run (default: the one in the config)")
+    return parser.parse_args(argv)
+
+
+def submit_job(vertex, spec, template: str, run_id: str, run_dir: str, sha: str) -> None:
+    """Run the compiled pipeline as the dedicated service account and wait for it."""
+    job = vertex.PipelineJob(
+        display_name=f"{spec.pipeline_name}-{run_id}",
+        template_path=template,
+        parameter_values={"run_dir": run_dir, "git_sha": sha},
+    )
+    job.submit(experiment=spec.experiment, service_account=spec.service_account)
+    job.wait()
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = parse_args(argv)
     spec = default_pipeline_spec()
+    if args.image_tag:
+        spec = spec.with_image_tag(args.image_tag)
     run_id = datetime.now(timezone.utc).strftime("run-%Y%m%d-%H%M%S")
     run_dir = spec.run_dir(run_id)
 
     aiplatform.init(project=spec.project, location=spec.region)
     with tempfile.TemporaryDirectory() as tmp:
         template = compile_pipeline(str(Path(tmp) / "pipeline.yaml"), spec)
-        job = aiplatform.PipelineJob(
-            display_name=f"{spec.pipeline_name}-{run_id}",
-            template_path=template,
-            parameter_values={"run_dir": run_dir, "git_sha": git_sha()},
-        )
-        job.submit(experiment=spec.experiment)
-        job.wait()
+        submit_job(aiplatform, spec, template, run_id, run_dir, git_sha())
 
     results = [read_json(metrics_uri(run_dir, n)) for n in spec.candidates]
     params = {n: c.params for n, c in spec.candidates.items()}
@@ -51,6 +68,7 @@ def main() -> None:
     LOCAL_REPORT.parent.mkdir(parents=True, exist_ok=True)
     storage.Client().bucket(bucket).blob(obj).download_to_filename(str(LOCAL_REPORT))
     print(f"Metrics: {run_dir}/custom_pipeline_metrics.json -> {LOCAL_REPORT}")
+    print(f"run_dir={run_dir}")
 
 
 if __name__ == "__main__":

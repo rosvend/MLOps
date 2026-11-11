@@ -17,6 +17,10 @@ def _blob(uri: str, client):
     return client.bucket(bucket).blob(obj)
 
 
+def read_bytes(uri: str, client=None) -> bytes:
+    return _blob(uri, client).download_as_bytes()
+
+
 def read_csv(uri: str, client=None) -> pd.DataFrame:
     return pd.read_csv(BytesIO(_blob(uri, client).download_as_bytes()))
 

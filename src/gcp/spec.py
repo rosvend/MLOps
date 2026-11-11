@@ -32,11 +32,15 @@ class PipelineSpec(BaseModel):
     pipeline_name: str
     experiment: str
     image: str
+    service_account: str
     cpu: str
     memory: str
     seed: int
     reference: dict
     candidates: dict[str, CandidateParams]
+
+    def with_image_tag(self, tag: str) -> "PipelineSpec":
+        return self.model_copy(update={"image": f"{self.image.rsplit(':', 1)[0]}:{tag}"})
 
     def run_dir(self, run_id: str) -> str:
         return f"gs://{self.bucket}/{self.runs_prefix}/{run_id}"
