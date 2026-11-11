@@ -146,9 +146,10 @@ gate and the human still decide whether a new model is better.
 | --- | --- |
 | Submit options (`--image-tag`, `service_account`), the gate and its unit tests | Built and tested; the gate ran against the real bucket |
 | Environment `production` with a required reviewer | Created |
-| `train.yaml`, `drift-check.yaml` | Pass `actionlint`; shell steps run locally against fakes. **Not run on GitHub**, because workflows with `workflow_dispatch`, `schedule` or `repository_dispatch` only work once they are on `main` |
-| Image build and push, Vertex run as `vertex-pipeline`, approval pause, `gh workflow run deploy.yaml` | Untested end to end |
-| Drift call with a real ID token | Untested; the status handling was checked against a local fake server |
-| A `promote` decision on real data | Never seen: so far the only candidate equals the champion |
+| `train.yaml` end to end on GitHub (2026-11-11) | **Ran.** Image built and pushed on the runner, the Vertex pipeline ran as `vertex-pipeline`, the gate answered `keep` (PR-AUC 0.1293 for both models), `promote` was skipped and `notify` fired. About 10 minutes |
+| First push-triggered run | Failed: the workflow set a quota project that the federated identity cannot bill. Fixed by clearing it, as `ci.yaml` already did |
+| The approval pause (`force_promote` run) | **Ran:** the `promote` job paused at the `production` environment and waited for the reviewer. What happens after approval is recorded below once it has been approved |
+| `drift-check.yaml` end to end | **Ran.** It called the private API with an ID token, the runtime account read the BigQuery log, drift was detected (the test traffic was one repeated loan) and it started a Train run. Its first run failed on the last step (`gh` did not know the repository, fixed with `GH_REPO`) |
+| A `promote` decision from the gate on real data | Never seen: every candidate so far equals the champion, so the interval of the difference is [0, 0]; `force_promote` exercises the same path by hand |
 
 To test the whole loop once after merging, see the steps in the pull request description.

@@ -150,6 +150,6 @@ Plain-language notes:
 | CI: tests, folder-structure check, metric check | Built |
 | Notification (job summary and commit comment) | Built |
 | Workload Identity Federation and the CI identity's permissions | Built |
-| CD: image build, canary deploy, smoke tests, rollback | Built, first real run happens after merging to `main` |
-| Training workflow, promotion gate and approval | Planned |
-| Scheduled drift check | Planned |
+| CD: image build, canary deploy, smoke tests | Built and run on GitHub: all steps passed, 100 % of traffic moved to the new revision. The rollback step has not been triggered (it was correctly skipped) |
+| Training workflow, promotion gate and approval | Built and run; the approval pause was reached, see [Training workflow](training-workflow.md) |
+| Scheduled drift check | Built and run; drift detected and a Train run started |
