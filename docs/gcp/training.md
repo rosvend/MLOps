@@ -48,8 +48,29 @@ cross-validation but generalise worse to the newest months, the same finding as 
 ## AutoML Tabular
 
 AutoML searches model types and settings itself, within a training budget of **1 node-hour**
-(about $21 at list price, the minimum it allows). It uses the same split column. Its results are
-added to this page once the run finishes.
+(about $21 at list price, the minimum it allows). It uses the same split column. Details, commands
+and resource ids are on the [AutoML run](automl.md) page.
+
+AutoML's own evaluation reports PR-AUC 0.970 and ROC-AUC 0.979. **Those are not comparable.** They
+appear to pool both classes, so the 96 % of loans that do not default dominate, and they cover
+only 2,166 of the 3,050 TEST loans: AutoML refused to score any row with an empty numeric cell.
+The comparison below recomputes everything the same way for every model.
+
+| Model | Loans scored | PR-AUC | ROC-AUC | Gini | F1 | Recall |
+| --- | --- | --- | --- | --- | --- | --- |
+| Logistic champion (local and Vertex) | 3,050 | 0.129 | 0.664 | 0.327 | 0.117 | 0.337 |
+| AutoML, unscored loans given score 0 | 3,050 | 0.159 | 0.595 | 0.190 | 0.138 | 0.396 |
+| AutoML, scored loans only (not comparable) | 2,166 | 0.235 | 0.815 | 0.629 | 0.164 | 0.524 |
+| AutoML, Vertex's own figures (not comparable) | 2,166 | 0.970 | 0.979 | | | |
+
+Read the first two rows against each other. AutoML ranks the riskiest loans slightly better
+(PR-AUC 0.159 against 0.129) but is worse overall (Gini 0.190 against 0.327). Giving the
+unscored loans a score of 0 is a harsh choice, so AutoML's true performance sits somewhere
+between the second and third rows. With only 101 defaults in TEST, all of these numbers are noisy.
+
+The empty-cell problem is the practical lesson: the local pipeline imputes missing values and
+adds "was missing" flags, while AutoML as configured here cannot score such rows. Fixing it
+would mean imputing before upload and paying for another training run.
 
 ## Local versus cloud
 
@@ -58,5 +79,5 @@ added to this page once the run finishes.
 | Control over the model | Full | Full | Limited |
 | Setup effort | Low | High (image, pipeline, IAM) | Medium |
 | Wall-clock time | About 2.5 minutes for tuning | Dominated by VM start-up per step | Dominated by the training budget |
-| Cost | Free | A few cents | About $21 at the minimum budget |
+| Cost | Free | A few cents | About $22 (estimate; check Billing) |
 | Reproducibility | Depends on the machine | Container plus config | Managed |

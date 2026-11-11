@@ -1,0 +1,66 @@
+# Vertex AI AutoML Tabular: classification on the loan book. Nothing cloud-specific lives in Python.
+
+project: mlops-roysandoval
+region: us-central1
+dataset_uri: gs://mlops-roysandoval-data/datasets/loans_split.csv
+dataset_display_name: loans-split
+job_display_name: loans-automl-v1
+model_display_name: loans-automl-v1
+
+label_column: defaulted
+split_column: split
+test_value: TEST
+
+# Same operating point as config/training/default.yaml, so thresholded metrics compare like for like.
+flagged_share: 0.157
+
+optimization_objective: maximize-au-prc
+# HARD cap: 1000 milli-node-hours = 1 node hour (the minimum AutoML accepts). Never raise it.
+budget_milli_node_hours: 1000
+early_stopping: true
+
+batch:
+  machine_type: n1-standard-2
+  replicas: 1
+  input_uri: gs://mlops-roysandoval-data/automl/batch/test_input.csv
+  output_prefix: gs://mlops-roysandoval-data/automl/batch/output
+  key_column: row_id
+
+# Booleans and integer-coded categories must be declared, AutoML would read them as numbers or text.
+categorical:
+  - tipo_credito
+  - tipo_laboral
+  - tendencia_ingresos
+  - cuota_supera_salario
+  - tiene_mora_bureau
+  - rango_edad
+  - falta_edad_cliente
+  - falta_salario_cliente
+  - falta_puntaje_datacredito
+  - falta_promedio_ingresos_datacredito
+  - falta_tendencia_ingresos
+  - falta_saldo_total
+  - falta_saldo_principal
+  - falta_saldo_mora
+numeric:
+  - capital_prestado
+  - plazo_meses
+  - edad_cliente
+  - salario_cliente
+  - total_otros_prestamos
+  - cuota_pactada
+  - puntaje_datacredito
+  - cant_creditosvigentes
+  - huella_consulta
+  - saldo_mora
+  - saldo_total
+  - saldo_principal
+  - creditos_sectorFinanciero
+  - creditos_sectorCooperativo
+  - creditos_sectorReal
+  - promedio_ingresos_datacredito
+  - dti
+  - pti
+  - monto_sobre_ingreso
+  - ratio_ingreso_declarado_bureau
+  - creditos_por_anio_adulto
