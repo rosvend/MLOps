@@ -9,17 +9,15 @@ Reproducible experiments · Automated CI/CD · Containerized serving · Live dri
 
 <br/>
 
-[![CI/CD](https://github.com/MOHD-OMER/mlops-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/MOHD-OMER/mlops-pipeline/actions/workflows/ci.yml)
-[![Docker](https://img.shields.io/docker/v/omer022/mlops-news-classifier?label=DockerHub&logo=docker&color=2496ED)](https://hub.docker.com/r/omer022/mlops-news-classifier)
-![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)
+[![CI](https://github.com/rosvend/MLOps/actions/workflows/ci.yaml/badge.svg)](https://github.com/rosvend/MLOps/actions/workflows/ci.yaml)
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![scikit-learn](https://img.shields.io/badge/scikit--learn-1.x-F7931E?logo=scikitlearn&logoColor=white)
 ![MLflow](https://img.shields.io/badge/MLflow-3.x-0194E2?logo=mlflow&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.11x-009688?logo=fastapi&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-green)
 
 <br/>
 
-[Overview](#-overview) · [Architecture](#-architecture) · [Pipeline Stages](#-pipeline-stages) · [Quick Start](#-quick-start) · [API Reference](#-api-reference) · [Results](#-results) · [Configuration](#-configuration) · [Extending](#-extending-the-pipeline)
+[Documentation site](https://rosvend.github.io/MLOps/) · [Architecture](#architecture) · [Google Cloud](#google-cloud) · [Quick Start](#-quick-start) · [Results](#results)
 
 <br/>
 
@@ -41,6 +39,26 @@ Full detail per stage in `docs/`: [architecture](docs/architecture.md) ·
 
 ---
 
+## Google Cloud
+
+The same pipeline runs on Google Cloud (project `mlops-roysandoval`): training on Vertex AI (a custom
+pipeline and AutoML), models in the Vertex Model Registry, the API on Cloud Run with a BigQuery prediction
+log, and GitHub Actions for CI, canary deploys, retraining behind a promotion gate and a human approval.
+
+```mermaid
+flowchart LR
+    push["Push to main"] --> ci["CI: tests, structure, metrics"]
+    ci --> deploy["Deploy: canary on Cloud Run"]
+    drift["Daily drift check"] -.-> train["Train on Vertex AI"]
+    train --> gate["Gate + human approval"]
+    gate --> deploy
+```
+
+Everything is explained, with diagrams, on the **[documentation site](https://rosvend.github.io/MLOps/)**. Start with
+*Target architecture*, *Phase 2 results*, *CI/CD* and *Cloud comparison*.
+
+---
+
 ## 🚀 Quick Start 
 
 ### Prerequisites
@@ -52,8 +70,8 @@ Full detail per stage in `docs/`: [architecture](docs/architecture.md) ·
 ### 1. Clone & install
 
 ```bash
-git clone https://github.com/rosvend/mlops.git
-cd mlops-pipeline
+git clone https://github.com/rosvend/MLOps.git
+cd MLOps
 uv sync
 ```
 ### 2. Authenticate to GCP
