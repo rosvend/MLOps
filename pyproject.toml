@@ -31,6 +31,13 @@ dependencies = [
 ]
 
 [dependency-groups]
+docs = [
+    "zensical>=0.1.1",
+]
+gcp = [
+    "google-cloud-aiplatform>=2.8.0",
+    "kfp>=2.18.0",
+]
 # Only what scoring a logistic regression needs. The boosters, MLflow and Feast's dask
 # stack train and register models; they have no part in answering a request.
 serving = [

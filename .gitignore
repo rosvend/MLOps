@@ -253,3 +253,5 @@ reports/
 infra/.terraform/
 infra/*.tfstate*
 infra/terraform.tfvars
+# Built documentation site
+site/

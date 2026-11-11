@@ -1,0 +1,15 @@
+# Training image for the Vertex AI pipeline (the serving Dockerfile is separate).
+FROM python:3.12-slim-bookworm
+
+# xgboost and lightgbm need the OpenMP runtime.
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
+ && rm -rf /var/lib/apt/lists/*
+
+ENV PYTHONPATH=/app PYTHONUNBUFFERED=1
+WORKDIR /app
+
+COPY docker/requirements-train.txt .
+RUN pip install --no-cache-dir -r requirements-train.txt
+
+COPY src/ src/
+COPY config/ config/

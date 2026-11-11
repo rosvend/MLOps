@@ -1,0 +1,7 @@
+# Builds docker/Dockerfile.train from the repo root and pushes it to Artifact Registry.
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: [build, -f, docker/Dockerfile.train, -t, "${_IMAGE}", .]
+images: ["${_IMAGE}"]
+substitutions:
+  _IMAGE: us-central1-docker.pkg.dev/mlops-roysandoval/mlops/train:latest

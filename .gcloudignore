@@ -1,0 +1,16 @@
+# Keep the Cloud Build upload small: the training image only needs src/, config/ and docker/.
+# Leading slashes anchor to the repo root (an unanchored "models" would also drop src/models).
+/.git
+/.venv
+/data
+/mlartifacts
+/mlflow.db
+/outputs
+/notebooks
+/models
+/reports
+/docs
+/tests
+/infra
+/feature_repo
+**/__pycache__

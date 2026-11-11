@@ -1,0 +1,35 @@
+[project]
+site_name = "Loan-default MLOps"
+site_description = "An end-to-end MLOps pipeline for bank loan default scoring, from raw data to Google Cloud."
+site_url = "https://rosvend.github.io/MLOps/"
+repo_url = "https://github.com/rosvend/MLOps"
+repo_name = "rosvend/MLOps"
+docs_dir = "docs"
+
+nav = [
+  { "Home" = "index.md" },
+  { "The pipeline" = [
+    { "Architecture" = "architecture.md" },
+    { "Feature engineering" = "feature-engineering.md" },
+    { "Feature store" = "feature-store.md" },
+    { "Heuristic baseline" = "heuristic-model.md" },
+    { "Model training" = "model-training.md" },
+    { "Serving" = "serving.md" },
+    { "Monitoring" = "monitoring.md" },
+  ] },
+  { "Google Cloud" = [
+    { "Target architecture" = "gcp/overview.md" },
+    { "Foundations" = "gcp/foundations.md" },
+    { "Training on Vertex AI" = "gcp/training.md" },
+    { "Custom pipeline run" = "gcp/custom-pipeline.md" },
+    { "CI/CD" = "gcp/cicd.md" },
+    { "Design decisions" = "gcp/decisions.md" },
+  ] },
+]
+
+[project.markdown_extensions]
+admonition = {}
+tables = {}
+pymdownx.superfences.custom_fences = [
+  { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
+]

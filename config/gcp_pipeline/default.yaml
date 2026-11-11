@@ -1,0 +1,45 @@
+# Custom Vertex AI pipeline: where it runs, on what, and which models it trains.
+
+project: mlops-roysandoval
+region: us-central1
+bucket: mlops-roysandoval-data
+dataset_uri: gs://mlops-roysandoval-data/datasets/loans_split.csv
+runs_prefix: pipeline-runs
+pipeline_name: loan-default-custom
+image: us-central1-docker.pkg.dev/mlops-roysandoval/mlops/train:latest
+# Vertex picks the smallest machine that satisfies these (about an e2-standard-2); no GPU.
+cpu: "2"
+memory: 8G
+seed: 0
+
+# Local champion on the same out-of-time window (README), the number to beat.
+reference:
+  name: local_champion_logistic
+  pr_auc: 0.129
+  gini: 0.327
+
+# Tuned params taken from the local Optuna run (mlflow.db, experiment credito-scoring).
+# Estimator and fixed settings come from config/training/default.yaml; no search runs here.
+candidates:
+  logistic:
+    params: {C: 0.08686007279808698}
+  xgboost:
+    params:
+      n_estimators: 600
+      max_depth: 3
+      learning_rate: 0.016646881961913787
+      subsample: 0.6678348473933196
+      colsample_bytree: 0.7086224548498348
+      min_child_weight: 1.880262553323859
+      reg_lambda: 2.508112052068066
+      scale_pos_weight: 2.105680994975459
+  lightgbm:
+    params:
+      n_estimators: 300
+      num_leaves: 28
+      learning_rate: 0.01053259791250299
+      min_child_samples: 73
+      subsample: 0.9643455210330591
+      colsample_bytree: 0.99933627124064
+      reg_lambda: 13.35602219427903
+      scale_pos_weight: 14.237960779972871
