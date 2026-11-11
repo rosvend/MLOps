@@ -14,6 +14,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     env:
+      # Empty on purpose: the Makefile's quota project would make the federated identity bill the project, which it may not.
+      GOOGLE_CLOUD_QUOTA_PROJECT: ""
       # Forks and Dependabot get no id-token, so the cloud steps are skipped for them.
       CLOUD: ${{ github.event.pull_request.head.repo.fork != true && github.actor != 'dependabot[bot]' }}
     steps:
