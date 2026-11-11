@@ -102,7 +102,7 @@ comparing two separate intervals.
   investigation found that gains below about 0.01 cannot be told from noise on this data
   ([model-signal investigation](../investigation/model-signal.md)); the gaps here are larger than 0.01 but
   the sample is too small to say they are real.
-* **No model is clearly better.** Ranking quality sits around ROC-AUC 0.64 to 0.66 whichever tool built it.
+* **AutoML v2 is the exception.** Its PR-AUC advantage over the logistic model is distinguishable from noise (see the paired-difference table), and its ROC-AUC interval does not overlap the logistic model's. Among everything else, ranking quality sits around ROC-AUC 0.64 to 0.66 whichever tool built it. Section 6 discusses why AutoML v2 is better and how far to trust it.
 
 ## 5. Stability and consistency
 
@@ -170,9 +170,8 @@ logistic model (PR-AUC 0.129, ROC-AUC 0.664) sit inside this range.
   a different mix of loans (2.9 % defaults against 3.3 %), so it **must not** be compared with the
   other rows.
 * The local and custom pipelines fill missing values and add "was missing" flags inside the model, so they
-  score every row. AutoML v2 repeats the run on data imputed beforehand (the same imputation fitted on
-  training data only, so nothing leaks) to cover all rows. Its row is in the tables above and fills in
-  automatically when the batch output exists.
+  score every row. AutoML v2 repeated the run on data imputed beforehand (the imputation statistics were fitted
+  on training rows only, so nothing leaks). It scored all 3,050 rows, so its row is directly comparable.
 * AutoML is also harder to **repeat**: we do not control its search, so a re-run may produce a different
   model (not tested here). The custom pipeline reproduces exactly (5a).
 
@@ -200,17 +199,28 @@ prove it. Metrics should be refreshed when TEST loans mature.
 
 What the evidence says, and what it does not:
 
-* On this data, AutoML did **not** beat a simple logistic regression in any way we can demonstrate: its PR-AUC
-  looks higher, its ROC-AUC lower, and all the intervals overlap.
-* The signal in the data looks limited (ROC-AUC about 0.70 even in the best validation of the investigation);
-  no tool can extract what is not there, which is consistent with the 21 dollars not buying a clear improvement.
-* The case for manual is therefore mostly about **cost, control and being able to explain and repeat** a
-  credit decision, not about accuracy.
-* The case for AutoML is speed to a first, unbiased baseline: its result also suggests that a heavier
-  search does not find hidden structure here.
-* With {{ n_defaults }} defaults in TEST, one experiment per tool and an unproven label-maturity effect, we
-  do not claim a winner. A fairer verdict needs more defaults (more months), repeated AutoML runs and
-  matured labels.
+* **AutoML v2 ranks defaulters clearly better than our models on this window.** In this run its PR-AUC (0.215)
+  and ROC-AUC (0.790) sit well above the logistic model's (0.129 and 0.664). The paired-bootstrap interval of
+  the PR-AUC difference excludes zero and the ROC-AUC intervals do not overlap. The tables above always hold
+  the current numbers.
+* **The data is not empty of signal after all.** Our own models plateau around ROC-AUC 0.65 to 0.70; AutoML's
+  search finds more. Its own feature importance points to the number of recent credit inquiries
+  (`huella_consulta`), the loan term (`plazo_meses`) and the bureau score. The term effect is exactly the
+  non-linear pattern that the [investigation](../investigation/model-signal.md) found a linear model cannot use.
+  That is a plausible, checkable explanation, not a proven one. It uses no label, split or identifier column.
+* **Why we still do not simply replace the champion.**
+    1. One window and 101 defaults: wide intervals, and this window has already been used to compare models
+       more than once, so it is not a clean holdout.
+    2. AutoML v2 was run after seeing v1's result on the same window. We changed the data preparation
+       (imputation), not the model, but it is still a second look.
+    3. Practicalities: about $21 and 2 h 15 min per training run, and a black-box model. Serving it would need
+       a Vertex endpoint (always-on cost) or an export; we did neither.
+    4. The label-maturity caveat (5f) affects every model.
+* **The case for manual** stays about cost, control, speed (minutes), exact reproducibility and being able to
+  explain a credit decision. **The case for AutoML** is concrete here: it found structure that our linear model and
+  our tuned gradient-boosted models missed, which is a lead to bring back into the manual pipeline.
+* **Next step, judged fairly:** add the term effect and a few interactions to the manual pipeline, and evaluate
+  them on loans from months not yet used (the window must be fresh), with the same paired-bootstrap rule.
 
 ## 7. How to regenerate
 
@@ -218,7 +228,7 @@ What the evidence says, and what it does not:
 make phase2-report     # fetches the model files and batch predictions from GCS (read only), then rebuilds
 ```
 
-When AutoML v2 finishes and its batch predictions are written to the output folder, run it again: the v2
-row, the charts and the "pending" note update by themselves. The predictions behind the page are cached in
+The AutoML v2 row is included automatically when its batch predictions exist in the output folder, so the
+page can be rebuilt at any time. The predictions behind the page are cached in
 `reports/gcp/phase2_predictions.csv`; `uv run python -m src.reports.phase2 --offline` rebuilds the page from
 that cache without touching the cloud.

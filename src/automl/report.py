@@ -1,8 +1,9 @@
 """After training: Vertex's own metrics, a TEST-only batch prediction, and the comparable metrics.
 
-    GOOGLE_CLOUD_QUOTA_PROJECT=mlops-roysandoval uv run --group gcp python -m src.automl.report <model_resource_name>
+    GOOGLE_CLOUD_QUOTA_PROJECT=mlops-roysandoval uv run --group gcp python -m src.automl.report <config.yaml> <model> <report.json> [<batch job>]
 """
 
+import io
 import json
 import sys
 from pathlib import Path
@@ -12,9 +13,8 @@ from google.cloud import aiplatform, storage
 from google.protobuf.json_format import MessageToDict
 
 from src.automl.evaluate import batch_input, evaluate_scores, fill_unscored, parse_predictions
-from src.automl.spec import default_automl_spec
+from src.automl.spec import load_automl_spec
 
-REPORT = Path(__file__).resolve().parents[2] / "reports" / "gcp" / "automl_metrics.json"
 LOCAL_CSV = Path(__file__).resolve().parents[2] / "data" / "gcp" / "loans_split.csv"
 
 
@@ -23,19 +23,26 @@ def _blob(uri: str, client):
     return client.bucket(bucket), path
 
 
+def _download(uri: str, client) -> bytes:
+    bucket, path = _blob(uri, client)
+    return bucket.blob(path).download_as_bytes()
+
+
 def vertex_metrics(model) -> dict:
     ev = model.get_model_evaluation()
     m = MessageToDict(ev._gca_resource._pb)
     return {"name": ev.resource_name, "metrics": m.get("metrics", {})}
 
 
-def main(model_name: str, batch_job: str | None = None) -> None:
-    spec = default_automl_spec()
+def main(config: str, model_name: str, report_path: str, batch_job: str | None = None) -> None:
+    spec = load_automl_spec(Path(config))
     aiplatform.init(project=spec.project, location=spec.region)
     model = aiplatform.Model(model_name)
     gcs = storage.Client(project=spec.project)
 
-    feats, y = batch_input(pd.read_csv(LOCAL_CSV), spec)
+    # the file the model was trained on: the imputed copy for v2, the raw split file for v1
+    source = io.BytesIO(_download(spec.dataset_uri, gcs)) if spec.imputation else LOCAL_CSV
+    feats, y = batch_input(pd.read_csv(source), spec)
     bucket, path = _blob(spec.batch.input_uri, gcs)
     bucket.blob(path).upload_from_string(feats.to_csv(index=False), content_type="text/csv")
 
@@ -75,10 +82,11 @@ def main(model_name: str, batch_job: str | None = None) -> None:
         "full_window_unscored_as_zero": evaluate_scores(y.to_numpy(), full.to_numpy(), spec.flagged_share),
         "flagged_share": spec.flagged_share,
     }
-    REPORT.parent.mkdir(parents=True, exist_ok=True)
-    REPORT.write_text(json.dumps(result, indent=2, default=str))
+    out = Path(report_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(result, indent=2, default=str))
     print(json.dumps({k: result[k] for k in ("scored_rows", "scored_positives", "scored_subset_only", "full_window_unscored_as_zero")}, indent=2, default=str))
 
 
 if __name__ == "__main__":
-    main(*sys.argv[1:3])
+    main(*sys.argv[1:5])

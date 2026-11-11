@@ -117,3 +117,72 @@ No billing export is available here, so this is an estimate, not a measured figu
 
 Check the real number in Billing, Reports, filtered to project `mlops-roysandoval` and the
 Vertex AI service.
+
+## Version 2: imputed data
+
+**What changed.** v1 could not score 884 TEST loans because of empty numeric cells. v2 trains on a
+copy of the same file with no empty cell (`config/gcp_automl/imputed.yaml`, built by
+`src/automl/prepare.py`, logic in `src/automl/impute.py`). Numeric columns get the median of the
+TRAIN rows only; categorical and boolean columns get the label `missing`; the `falta_*` flags, the
+label and `split` are unchanged. VALIDATE and TEST never contribute a statistic (unit-tested), so
+there is no leakage. Everything else is the same: `maximize-au-prc`, predefined split, budget 1000
+milli-node-hours.
+
+```bash
+uv run --group gcp python -m src.automl.prepare
+uv run --group gcp python -m src.automl.train config/gcp_automl/imputed.yaml reports/gcp/automl_v2_state.json
+uv run --group gcp python -m src.automl.report config/gcp_automl/imputed.yaml <model> reports/gcp/automl_v2_metrics.json
+```
+
+| Resource | Id |
+|---|---|
+| Dataset | `4558560090474414080` |
+| Training pipeline `loans-automl-v2-imputed` | `3237129710127284224` (14:35 to 16:48 UTC) |
+| Model | `7535886120765095936` |
+| Batch prediction job | `4669028101026480128` (20:21 to 20:35 UTC, successfulCount 3,050) |
+| Batch output | `gs://mlops-roysandoval-data/automl/batch/output/prediction-loans-automl-v2-imputed-*` |
+
+**Result.** All 3,050 TEST loans (101 defaults) were scored, flagging the top 15.7 %:
+
+| Model on TEST | PR-AUC | ROC-AUC | Gini | F1 | Precision | Recall |
+|---|---|---|---|---|---|---|
+| AutoML v2 (imputed) | 0.215 | 0.790 | 0.581 | 0.169 | 0.102 | 0.485 |
+| AutoML v1, unscored as 0 | 0.159 | 0.595 | 0.190 | 0.138 | 0.084 | 0.396 |
+| Local logistic champion | 0.129 | 0.664 | 0.327 | 0.117 | 0.071 | 0.337 |
+| Heuristic baseline | 0.059 | | | | | |
+
+Vertex's own evaluation of v2 now covers all 3,050 rows (its confusion matrix sums to 3,050), but
+still reports auPRC 0.973, auROC 0.977, log loss 0.148 while catching only 7 of 101 defaulters at
+0.5. It is the same pooled-over-both-classes figure as in v1 (pooling is unverified for the headline
+numbers, see above) and is not comparable; our recomputation is the one to quote.
+
+**Reading it.** v2 ranks defaulters better than the champion on every metric above, and much better
+than v1, which confirms that v1's weak showing came from the unscored rows rather than the model.
+Honest caveats: TEST has only 101 defaults, so a few loans move PR-AUC a lot and the gap to the
+champion has not been shown to be significant here (the paired bootstrap intervals are on the results
+page). The champion is a hand-tuned, interpretable logistic model; AutoML is a black-box ensemble,
+and it trained on slightly different data (VALIDATE is a slice of the training window; imputed copy).
+One run, one seed: we did not repeat the training.
+
+**Cost (estimate; no billing export read).** Training at most 1 node hour, about $21.25 (hard cap);
+batch prediction about 14 minutes on one `n1-standard-2`, under $1. v2 adds about $22 to the
+roughly $22 of v1.
+
+### What v2 relies on
+
+AutoML publishes a global feature importance with each model evaluation (share of the total absolute
+attribution; read from the model's evaluation in the Vertex API):
+
+| Feature | Share |
+|---|---|
+| `huella_consulta` (recent credit inquiries) | 15.7 % |
+| `plazo_meses` (loan term) | 12.7 % |
+| `puntaje_datacredito` (bureau score) | 12.6 % |
+| `tendencia_ingresos`, `rango_edad`, `cant_creditosvigentes`, `cuota_pactada` | 4 % to 5 % each |
+
+All are inputs known at the moment of the decision. The model never sees the label, the `split` column or
+an identifier (35 input columns, checked in the training pipeline's configuration). The loan term is the
+non-linear effect that the [investigation](../investigation/model-signal.md) found a linear model cannot
+use: default risk is lowest around 11 to 12 months and highest above 24. So the likely explanation for the
+gap is real structure that AutoML's ensemble captures and our linear model does not. That is a plausible
+explanation, not a proof, and it comes from one test window.

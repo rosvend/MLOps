@@ -59,18 +59,23 @@ The comparison below recomputes everything the same way for every model.
 | Model | Loans scored | PR-AUC | ROC-AUC | Gini | F1 | Recall |
 | --- | --- | --- | --- | --- | --- | --- |
 | Logistic champion (local and Vertex) | 3,050 | 0.129 | 0.664 | 0.327 | 0.117 | 0.337 |
-| AutoML, unscored loans given score 0 | 3,050 | 0.159 | 0.595 | 0.190 | 0.138 | 0.396 |
+| AutoML v2, imputed data (fully scored) | 3,050 | 0.215 | 0.790 | 0.581 | 0.169 | 0.485 |
+| AutoML v1, unscored loans given score 0 | 3,050 | 0.159 | 0.595 | 0.190 | 0.138 | 0.396 |
 | AutoML, scored loans only (not comparable) | 2,166 | 0.235 | 0.815 | 0.629 | 0.164 | 0.524 |
 | AutoML, Vertex's own figures (not comparable) | 2,166 | 0.970 | 0.979 | | | |
 
-Read the first two rows against each other. AutoML ranks the riskiest loans slightly better
-(PR-AUC 0.159 against 0.129) but is worse overall (Gini 0.190 against 0.327). Giving the
-unscored loans a score of 0 is a harsh choice, so AutoML's true performance sits somewhere
-between the second and third rows. With only 101 defaults in TEST, all of these numbers are noisy.
+Read the rows in pairs. AutoML v1 (third row) looks mixed against the champion: a higher PR-AUC (0.159 against
+0.129) but a worse Gini (0.190 against 0.327), because it could not score 884 loans and they were given a
+score of 0, a harsh choice. AutoML v2 (second row) removes that problem and is the one to compare.
 
-The empty-cell problem is the practical lesson: the local pipeline imputes missing values and
-adds "was missing" flags, while AutoML as configured here cannot score such rows. Fixing it
-would mean imputing before upload and paying for another training run.
+The empty-cell problem was the practical lesson: the local pipeline imputes missing values and
+adds "was missing" flags, while AutoML v1 could not score such rows. v2 fixed it by imputing
+before upload (medians fitted on TRAIN only) and paying for a second training run. All 3,050 loans
+are now scored and AutoML v2 beats the logistic champion on every ranking metric in the table
+(PR-AUC 0.215 against 0.129, Gini 0.581 against 0.327). The paired bootstrap on the
+[results page](results.md) says the PR-AUC gap is distinguishable from noise, but it is one window with
+101 defaults that has been used before, so read it as strong evidence and not as proof. Vertex's own figures for v2 (PR-AUC 0.973)
+are still pooled over both classes and not comparable. Details on the [AutoML run](automl.md) page.
 
 ## Local versus cloud
 

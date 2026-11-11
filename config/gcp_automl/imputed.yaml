@@ -28,7 +28,7 @@ batch:
   machine_type: n1-standard-2
   replicas: 1
   input_uri: gs://mlops-roysandoval-data/automl/batch_v2/test_input.csv
-  output_prefix: gs://mlops-roysandoval-data/automl/batch_v2/output
+  output_prefix: gs://mlops-roysandoval-data/automl/batch/output
   key_column: row_id
 
 # Booleans and integer-coded categories must be declared, AutoML would read them as numbers or text.
