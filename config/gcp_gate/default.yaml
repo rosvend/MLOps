@@ -1,0 +1,22 @@
+# Promotion gate: when is a candidate better than the champion, and what must hold before it ships.
+
+champion_uri: gs://mlops-roysandoval-data/models/champion
+# TEST rows are used when the file has the split column; otherwise every row is scored.
+evaluation_uri: gs://mlops-roysandoval-data/datasets/loans_split.csv
+
+# Printed in the decision file and the docs; remove only when the evaluation rows are really fresh.
+limitation: >-
+  Evaluated on the TEST window of loans_split.csv. That window was already used to choose between
+  models, so it is not a fresh holdout and the comparison favours whichever model was selected on it.
+  Replace evaluation_uri with a file of newer, labelled loans as soon as they exist.
+
+promotion:
+  min_pr_auc_gain: 0.005      # candidate PR-AUC minus champion PR-AUC must reach this
+  bootstrap:
+    resamples: 1000
+    confidence: 0.95          # the interval of the PR-AUC difference must exclude zero
+    seed: 0
+
+sanity:
+  # Candidate share of rows flagged at its frozen threshold, as a multiple of flagged_share_at_fit.
+  flagged_share_ratio: [0.5, 2.0]

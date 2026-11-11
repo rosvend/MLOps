@@ -1,0 +1,198 @@
+name: Train
+
+# train -> gate -> (human approval) -> promote -> deploy. See docs/gcp/training-workflow.md.
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: Why you are retraining (shown in the summary)
+        default: manual run
+  schedule:
+    - cron: "0 6 * * 1" # Mondays, 06:00 UTC
+  repository_dispatch:
+    types: [drift-detected]
+  push:
+    branches: [main]
+    paths:
+      - "src/gcp/**"
+      - "src/models/**"
+      - "src/features/**"
+      - "config/training/**"
+      - "config/features/**"
+      - "config/gcp_pipeline/**"
+      - "docker/Dockerfile.train"
+      - "docker/requirements-train.txt"
+
+# One retraining at a time; a second one waits instead of racing on the champion.
+concurrency:
+  group: train
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  GOOGLE_CLOUD_PROJECT: ${{ vars.GCP_PROJECT_ID }}
+  GOOGLE_CLOUD_QUOTA_PROJECT: ${{ vars.GCP_PROJECT_ID }}
+  IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/mlops/train
+  CHAMPION_URI: gs://mlops-roysandoval-data/models/champion
+  REASON: ${{ inputs.reason || github.event.client_payload.reason || github.event_name }}
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      run_dir: ${{ steps.submit.outputs.run_dir }}
+      best: ${{ steps.best.outputs.best }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - run: uv sync --group gcp
+
+      - name: Build and push the training image
+        run: |
+          gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev" --quiet
+          docker build -f docker/Dockerfile.train -t "$IMAGE:$GITHUB_SHA" .
+          docker push "$IMAGE:$GITHUB_SHA"
+
+      - name: Run the Vertex AI pipeline and wait for it
+        id: submit
+        run: |
+          set -o pipefail
+          uv run python -m src.gcp.submit --image-tag "$GITHUB_SHA" | tee submit.log
+          echo "run_dir=$(grep '^run_dir=' submit.log | cut -d= -f2-)" >> "$GITHUB_OUTPUT"
+
+      - name: Pick the best candidate of the run
+        id: best
+        env:
+          RUN_DIR: ${{ steps.submit.outputs.run_dir }}
+        run: |
+          best=$(gcloud storage cat "$RUN_DIR/custom_pipeline_metrics.json" | jq -r .comparison.best)
+          echo "best=$best" >> "$GITHUB_OUTPUT"
+          echo "Trained \`$RUN_DIR\`; best candidate: \`$best\`" >> "$GITHUB_STEP_SUMMARY"
+
+  gate:
+    needs: train
+    runs-on: ubuntu-latest
+    outputs:
+      decision: ${{ steps.decide.outputs.decision }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - run: uv sync
+
+      - name: Compare the candidate with the champion
+        id: decide
+        env:
+          RUN_DIR: ${{ needs.train.outputs.run_dir }}
+          BEST: ${{ needs.train.outputs.best }}
+        run: |
+          uv run python -W ignore -m src.gcp.gate "$RUN_DIR" "$BEST" --out gate_decision.json
+          echo "decision=$(jq -r .decision gate_decision.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Write the job summary
+        run: |
+          {
+            echo "## Promotion gate: $(jq -r .decision gate_decision.json)"
+            echo
+            jq -r '.reasons[] | "- " + .' gate_decision.json
+            echo
+            jq -r '.metrics // empty | "PR-AUC candidate \(.pr_auc_candidate), champion \(.pr_auc_champion), gain \(.pr_auc_gain), interval \(.diff_ci)"' gate_decision.json
+            echo
+            echo "> $(jq -r .limitation gate_decision.json)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-decision
+          path: gate_decision.json
+
+  promote:
+    needs: [train, gate]
+    if: needs.gate.outputs.decision == 'promote'
+    runs-on: ubuntu-latest
+    # A required reviewer on this environment is the human approval.
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - run: uv sync --group gcp
+
+      - name: Copy the candidate over the champion (the bucket keeps the old versions)
+        env:
+          SRC: ${{ needs.train.outputs.run_dir }}/models/${{ needs.train.outputs.best }}
+        run: |
+          gcloud storage cp "$SRC/champion.joblib" "$SRC/champion.meta.json" "$SRC/reference_data.parquet" "$CHAMPION_URI/"
+
+      - name: Register the version and move the champion alias
+        env:
+          RUN_DIR: ${{ needs.train.outputs.run_dir }}
+          BEST: ${{ needs.train.outputs.best }}
+        run: |
+          set -o pipefail
+          uv run python -m src.gcp.register "$RUN_DIR" "$BEST" | tee register.log
+          version=$(grep -oP 'version \K[0-9]+' register.log)
+          uv run python -m src.gcp.register --promote "$version"
+
+      - name: Deploy the new champion
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run deploy.yaml --ref main
+
+  notify:
+    if: always()
+    needs: [train, gate, promote]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Summarise and notify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TRAIN: ${{ needs.train.result }}
+          GATE: ${{ needs.gate.result }}
+          DECISION: ${{ needs.gate.outputs.decision }}
+          PROMOTE: ${{ needs.promote.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          body="Retraining (${REASON}): train **${TRAIN}**, gate **${GATE}** (decision: ${DECISION:-none}), promote **${PROMOTE}** ([run log](${RUN_URL}))"
+          echo "$body" >> "$GITHUB_STEP_SUMMARY"
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -f body="$body" > /dev/null \
+            || echo "::warning::could not post the commit comment"
