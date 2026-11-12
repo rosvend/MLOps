@@ -148,3 +148,10 @@ resource "google_cloud_run_v2_service_iam_member" "ci_invokes_api" {
   role     = "roles/run.invoker"
   member   = google_service_account.github_ci.member
 }
+
+# GitHub Actions: read Cloud Run request and latency metrics for the canary analysis.
+resource "google_project_iam_member" "ci_reads_metrics" {
+  project = data.google_project.this.project_id
+  role    = "roles/monitoring.viewer"
+  member  = google_service_account.github_ci.member
+}

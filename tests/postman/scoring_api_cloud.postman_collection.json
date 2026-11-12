@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Scoring API on Cloud Run",
-    "description": "Tests for the deployed loan-default scoring API. The service is private: put an ID token in the environment variable id_token (gcloud auth print-identity-token; it expires after about an hour). Run it from the top: the first request is the warm-up; the service scales to zero when idle and the first call can take about 30 s.",
+    "description": "Tests for the deployed loan-default scoring API. The service is private: paste an ID token into the variable id_token (gcloud auth print-identity-token; it expires after about an hour), either in the selected environment or in this collection's Variables tab. base_url has a default here, so the collection also works with No environment selected. The first request is the warm-up: the service scales to zero and the first call can take about 30 s.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -15,6 +15,15 @@
     ]
   },
   "variable": [
+    {
+      "key": "base_url",
+      "value": "https://scoring-api-o4j26oozvq-uc.a.run.app"
+    },
+    {
+      "key": "id_token",
+      "value": "",
+      "type": "secret"
+    },
     {
       "key": "threshold",
       "value": ""

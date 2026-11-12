@@ -1,0 +1,15 @@
+# Canary analysis run by the Deploy workflow while the new revision has 10 % of the traffic.
+project: mlops-roysandoval
+service: scoring-api
+
+# Probe traffic keeps both revisions busy; real traffic alone is too thin to judge anything.
+probe:
+  requests_per_revision: 40
+  soak_seconds: 150            # the probes are spread over this time
+  metrics_wait_seconds: 120    # Cloud Monitoring takes a minute or two to show new requests
+
+thresholds:
+  min_requests: 20             # fewer requests than this in the metrics means no evidence: roll back
+  max_error_rate: 0.02         # share of 5xx responses of the candidate
+  max_p95_ms: 6000             # absolute cap on the candidate's 95th percentile latency
+  max_p95_ratio: 2.0           # candidate p95 against the previous revision's p95

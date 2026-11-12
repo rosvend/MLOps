@@ -71,8 +71,11 @@ sequenceDiagram
     GH->>CR: new revision, 0 % traffic, tag "candidate"
     GH->>CR: smoke test the tagged URL (health + one prediction)
     GH->>CR: 10 % candidate, 90 % previous
-    GH->>CR: smoke tests again
-    GH->>CR: 100 % candidate
+    loop soak time, about 2.5 minutes
+        GH->>CR: probe requests to the candidate and to the previous revision
+    end
+    GH->>GH: read Cloud Monitoring: requests, 5xx share and p95 latency of both
+    GH->>CR: 100 % candidate, only if the metrics pass
     alt any step fails
         GH->>CR: 100 % back to the previous revision
     end
@@ -82,9 +85,14 @@ Cloud Run keeps every revision, so a rollback is moving the traffic percentage a
 on 2026-11-11 a smoke test timed out on a cold revision, the workflow restored the previous revision on its own and
 failed the run.
 
-**What this canary is not.** It is a gradual switch with smoke tests, not an observation window. It does not wait, and it
-does not compare error rates or latency between the two revisions. With little traffic, 10 % of nothing says little. A
-stronger version would hold at 10 % for some minutes and read Cloud Monitoring metrics before moving on.
+**What the canary checks.** At 10 % the workflow sends 40 probe requests to each revision over 2.5 minutes, waits two minutes
+for Cloud Monitoring to catch up, and reads each revision's request count, 5xx share and 95th percentile latency. The
+candidate is rolled back if it has fewer than 20 requests in the metrics, more than 2 % server errors, a p95 above 6 s or
+above twice the previous revision's p95, or if any probe fails. The limits are in `config/ci/canary.yaml`.
+
+**What it still is not.** Most of the traffic it judges is probe traffic, because real traffic is thin. It looks at errors
+and speed, not at the quality of the predictions, and the whole check lasts about five minutes. A canary on a busy service
+would hold longer and could also compare the score distribution of the two revisions.
 
 Code changes and model changes use different gates: a code push deploys automatically after tests and smoke tests, with no
 human approval; a new model needs the gate and an approval.

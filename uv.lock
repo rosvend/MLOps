@@ -2026,6 +2026,22 @@ wheels = [
 ]
 
 [[package]]
+name = "google-cloud-monitoring"
+version = "2.32.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "google-api-core", extra = ["grpc"] },
+    { name = "google-auth" },
+    { name = "grpcio" },
+    { name = "proto-plus" },
+    { name = "protobuf" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c8/94/68b1d25f99f8e61c8d4d4403caab3746c9e4aa629e1a8aef22f7f099c95c/google_cloud_monitoring-2.32.0.tar.gz", hash = "sha256:507501ce1c39161c071754f7ed14cd527788b4ea44a1d052bd815c115a70ea48", size = 388895, upload-time = "2026-10-01T18:17:17.249Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/89/97/86870c4f046bba0dcd5ca2099f30413653b84d0fbef611e5f39f8a94e3a8/google_cloud_monitoring-2.32.0-py3-none-any.whl", hash = "sha256:b6c026a5780330aa26c6151279194daa241369b324c96fd6c52c703137bc6b5b", size = 384477, upload-time = "2026-10-01T18:11:09.382Z" },
+]
+
+[[package]]
 name = "google-cloud-resource-manager"
 version = "1.19.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3575,6 +3591,7 @@ docs = [
 ]
 gcp = [
     { name = "google-cloud-aiplatform" },
+    { name = "google-cloud-monitoring" },
     { name = "kfp" },
 ]
 loadtest = [
@@ -3625,6 +3642,7 @@ requires-dist = [
 docs = [{ name = "zensical", specifier = ">=0.1.1" }]
 gcp = [
     { name = "google-cloud-aiplatform", specifier = ">=2.8.0" },
+    { name = "google-cloud-monitoring", specifier = ">=2.32.0" },
     { name = "kfp", specifier = ">=2.18.0" },
 ]
 loadtest = [{ name = "locust", specifier = ">=2.46.6" }]

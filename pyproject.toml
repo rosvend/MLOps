@@ -36,6 +36,7 @@ docs = [
 ]
 gcp = [
     "google-cloud-aiplatform>=2.8.0",
+    "google-cloud-monitoring>=2.32.0",
     "kfp>=2.18.0",
 ]
 loadtest = [

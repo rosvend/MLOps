@@ -8,8 +8,8 @@
 ## Run the cloud collection
 
 1. Get a token (it expires after about an hour): `gcloud auth print-identity-token`
-2. In Postman, import both cloud files, select the environment "Scoring API (Cloud Run)" and paste the token into the
-   `id_token` variable. Check that `base_url` matches `gcloud run services describe scoring-api --region us-central1 --format='value(status.url)'`.
+2. In Postman, import the collection (the environment file is optional: the collection has its own `base_url`). If you use the environment, select it in the top-right dropdown, because with **No environment** selected Postman cannot read environment variables and shows `getaddrinfo EAI_AGAIN {{base_url}}`. Select the environment "Scoring API (Cloud Run)" and paste the token into the
+   `id_token` variable (or, without an environment, into the collection's Variables tab). Check that `base_url` matches `gcloud run services describe scoring-api --region us-central1 --format='value(status.url)'`.
 3. Run the collection from the top. The first request is the warm-up: the service scales to zero, so the first call after
    a quiet period can take about 30 s.
 

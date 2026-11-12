@@ -42,9 +42,9 @@ The workflow signs in with Workload Identity Federation, described in
 Cloud Run keeps every deployment as a numbered revision.
 
 1. Deploy the new revision with no traffic.
-2. Send 10 % of requests to it and check health and errors.
-3. If healthy, move to 100 %. If not, send traffic back to the previous revision, which takes
-   seconds.
+2. Send 10 % of requests to it, keep both revisions busy with probe requests for a few minutes and judge the new one
+   from its Cloud Monitoring metrics (see [Canary analysis](#canary-analysis)).
+3. If it passes, move to 100 %. If not, send traffic back to the previous revision, which takes seconds.
 
 ## The CI workflow
 
@@ -108,7 +108,7 @@ flowchart TB
     img --> dep["Deploy revision<br/>no traffic, tag candidate"]
     dep --> s1["Smoke test candidate URL"]
     s1 --> p10["10 % of traffic"]
-    p10 --> s2["Smoke test again"]
+    p10 --> s2["Canary analysis<br/>probes + Cloud Monitoring metrics"]
     s2 --> p100["100 % of traffic"]
     p100 --> s3["Final check"]
     s1 -. failure .-> rb["Roll back to previous revision"]
@@ -127,7 +127,16 @@ Plain-language notes:
   is `github-ci`, with the service URL as audience, and sends it as `Authorization: Bearer`.
 - **Smoke test.** `scripts/smoke_test.sh` calls `GET /health` (must say `ok` with the model loaded)
   and `POST /predict/batch` with the sample loan in `config/ci/smoke_request.json`.
-- **Canary.** 10 % of real requests go to the new revision, the checks run again, then it takes 100 %.
+- **Canary.** 10 % of requests go to the new revision, then the canary analysis runs (below), then it takes 100 %.
+### Canary analysis
+
+`src/ci/canary.py` (limits in `config/ci/canary.yaml`) runs while the candidate has 10 % of the traffic. It sends 40 probe
+requests to the candidate and 40 to the previous revision (both are reachable through tagged URLs) over 2.5 minutes, waits two
+minutes for Cloud Monitoring, and reads each revision's request count, share of 5xx responses and 95th percentile latency.
+It fails, and so rolls back, when the candidate has fewer than 20 requests in the metrics, more than 2 % server errors, a p95
+above 6 s or above twice the previous revision's, or when any probe fails. The workflow's `canary_p95_limit_ms` input
+lowers the latency cap, so a manual run with the value 1 forces a failure and shows the rollback.
+
 - **Rollback.** A final step runs only `if: failure()`: it sends 100 % of traffic back to the revision
   that served before the deploy. The run still ends red. Previous and new revision names are in the job summary.
 - **`concurrency`.** Two deploys never run at once.

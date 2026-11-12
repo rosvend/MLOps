@@ -16,6 +16,11 @@ on:
       - "pyproject.toml"
       - "uv.lock"
   workflow_dispatch:
+    inputs:
+      canary_p95_limit_ms:
+        description: Override the canary latency cap in ms (use 1 to force a failure and test the rollback)
+        required: false
+        default: ""
   workflow_call:
 
 # One deploy at a time; a second one waits instead of racing on traffic.
@@ -47,6 +52,13 @@ jobs:
       GOOGLE_CLOUD_QUOTA_PROJECT: ""
     steps:
       - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Install the dependencies of the canary analysis
+        run: uv sync --group gcp
 
       - uses: google-github-actions/auth@v2
         with:
@@ -111,6 +123,27 @@ jobs:
             --to-revisions "${{ steps.candidate.outputs.revision }}=10,${{ steps.previous.outputs.revision }}=90"
           scripts/smoke_test.sh "${{ steps.candidate.outputs.candidate_url }}"
           scripts/smoke_test.sh "${{ steps.candidate.outputs.service_url }}"
+
+      - name: Tag the previous revision so it can be probed too
+        id: previous_tag
+        run: |
+          gcloud run services update-traffic "$SERVICE" --region "${{ vars.GCP_REGION }}" \
+            --set-tags "previous=${{ steps.previous.outputs.revision }}" --quiet
+          desc=$(gcloud run services describe "$SERVICE" --region "${{ vars.GCP_REGION }}" --format=json)
+          echo "url=$(jq -r '.status.traffic[] | select(.tag == "previous") | .url' <<< "$desc")" >> "$GITHUB_OUTPUT"
+
+      # Probes both revisions for a few minutes, then judges the candidate from Cloud Monitoring metrics.
+      - name: Canary analysis from Cloud Monitoring metrics
+        env:
+          ID_TOKEN: ${{ steps.token.outputs.id_token }}
+          P95_LIMIT: ${{ inputs.canary_p95_limit_ms }}
+        run: |
+          uv run python -m src.ci.canary \
+            --candidate-revision "${{ steps.candidate.outputs.revision }}" \
+            --candidate-url "${{ steps.candidate.outputs.candidate_url }}" \
+            --previous-revision "${{ steps.previous.outputs.revision }}" \
+            --previous-url "${{ steps.previous_tag.outputs.url }}" \
+            ${P95_LIMIT:+--max-p95-ms "$P95_LIMIT"}
 
       - name: Send 100 percent of traffic to the new revision
         env:
