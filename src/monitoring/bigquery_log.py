@@ -5,6 +5,8 @@ import json
 
 import pandas as pd
 
+from src.monitoring.predictions_log import _jsonable
+
 
 class BigQueryPredictionsLog:
     """`client` is a google.cloud.bigquery.Client (injected); `table_id` is project.dataset.table."""
@@ -15,7 +17,7 @@ class BigQueryPredictionsLog:
 
     def append(self, records: list[dict]) -> None:
         ahora = pd.Timestamp.now(tz="UTC").isoformat()
-        filas = [{"scored_at": ahora, "payload": json.dumps(r, default=str)} for r in records]
+        filas = [{"scored_at": ahora, "payload": json.dumps(_jsonable(r), default=str, allow_nan=False)} for r in records]
         errores = self._client.insert_rows_json(self._table_id, filas)
         if errores:
             raise RuntimeError(f"BigQuery rechazó filas de {self._table_id}: {errores}")

@@ -111,3 +111,25 @@ def test_env_var_switches_to_bigquery(monkeypatch):
     finally:
         monkeypatch.delenv("PREDICTIONS_LOG_TYPE")
         default_monitoring_spec.cache_clear()
+
+
+def test_missing_values_are_sent_as_json_null_not_nan(log, client):
+    """BigQuery's JSON column rejects the literal NaN, which rejected the whole insert."""
+    import numpy as np
+
+    log.append([{"application_id": "A1", "salario_cliente": float("nan"), "dti": np.float64("nan"),
+                 "huella_consulta": float("inf"), "tendencia_ingresos": None, "edad_cliente": 30.0}])
+
+    payload = client.rows[0]["payload"]
+    assert "NaN" not in payload and "Infinity" not in payload
+    stored = json.loads(payload)
+    assert stored["salario_cliente"] is None and stored["dti"] is None and stored["huella_consulta"] is None
+    assert stored["edad_cliente"] == 30.0
+
+
+def test_the_sqlite_log_also_stores_missing_values_as_null(tmp_path):
+    local = PredictionsLog(tmp_path / "p.db")
+    local.append([{"application_id": "A1", "salario_cliente": float("nan")}])
+
+    raw = local._conn.execute("SELECT payload FROM predictions").fetchone()[0]
+    assert "NaN" not in raw

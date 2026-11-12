@@ -6,6 +6,7 @@ and the one file the constraint's "lightweight, no heavy DB" explicitly allows.
 """
 
 import json
+import math
 import sqlite3
 import threading
 from pathlib import Path
@@ -69,7 +70,21 @@ class PredictionsLog:
 
 
 def _jsonable(record: dict) -> dict:
-    return {k: (bool(v) if isinstance(v, bool) else v) for k, v in record.items()}
+    """Strict-JSON values: NaN, NaT and infinities become null (BigQuery's JSON type rejects NaN)."""
+    return {k: _scalar(v) for k, v in record.items()}
+
+
+def _scalar(valor):
+    if valor is None or isinstance(valor, bool):
+        return valor
+    try:
+        if pd.isna(valor):
+            return None
+    except (TypeError, ValueError):  # arrays and other containers have no single "missing" answer
+        return valor
+    if isinstance(valor, float) and math.isinf(valor):
+        return None
+    return valor.item() if hasattr(valor, "item") else valor
 
 
 def _bigquery_client():

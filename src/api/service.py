@@ -125,7 +125,10 @@ def score(
                     "review_flag": pred["review_flag"],
                 }
             )
-        predictions_log.append(registros_log)
+        try:
+            predictions_log.append(registros_log)
+        except Exception:  # the log is a side effect: a failure must not take the score away
+            _log.exception("no se pudo registrar la predicción en el log; se devuelve el puntaje igualmente")
 
     return predicciones
 

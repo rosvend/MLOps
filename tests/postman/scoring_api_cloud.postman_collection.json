@@ -1,0 +1,446 @@
+{
+  "info": {
+    "name": "Scoring API on Cloud Run",
+    "description": "Tests for the deployed loan-default scoring API. The service is private: put an ID token in the environment variable id_token (gcloud auth print-identity-token; it expires after about an hour). Run it from the top: the first request is the warm-up; the service scales to zero when idle and the first call can take about 30 s.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{id_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "threshold",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Basics",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Needs the token. The first call after a quiet period can take 10 to 30 s (cold start)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"status ok and model loaded\", () => { pm.expect(b.status).to.eql(\"ok\"); pm.expect(b.model_loaded).to.eql(true); });",
+                  "pm.test(\"reports the frozen threshold and 35 features\", () => { pm.expect(b.threshold).to.be.within(0,1); pm.expect(b.n_features).to.eql(35); });",
+                  "pm.test(\"responds within 60 s (the first call after idle is a cold start, about 30 s)\", () => pm.expect(pm.response.responseTime).to.be.below(60000));",
+                  "pm.collectionVariables.set(\"threshold\", b.threshold);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Predict: one application",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/predict/batch",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "predict",
+                "batch"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"records\": [\n    {\n      \"application_id\": \"APP-1\",\n      \"tipo_credito\": \"9\",\n      \"capital_prestado\": 4200000,\n      \"plazo_meses\": 24,\n      \"edad_cliente\": 23,\n      \"tipo_laboral\": \"Independiente\",\n      \"salario_cliente\": 1200000,\n      \"total_otros_prestamos\": 3500000,\n      \"cuota_pactada\": 390000,\n      \"puntaje_datacredito\": 680,\n      \"cant_creditosvigentes\": 7,\n      \"huella_consulta\": 11,\n      \"tendencia_ingresos\": \"Decreciente\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"one prediction, id echoed\", () => { pm.expect(b.predictions).to.have.length(1); pm.expect(b.predictions[0].application_id).to.eql(\"APP-1\"); });",
+                  "const p = b.predictions[0];",
+                  "pm.test(\"probability is between 0 and 1\", () => pm.expect(p.probability_default).to.be.within(0,1));",
+                  "pm.test(\"review_flag follows the frozen threshold\", () => pm.expect(p.review_flag).to.eql(p.probability_default >= b.threshold));",
+                  "pm.test(\"no custom threshold was asked for\", () => pm.expect(p.review_flag_at_custom_threshold).to.eql(null));",
+                  "pm.test(\"flagged count matches\", () => pm.expect(b.flagged).to.eql(p.review_flag ? 1 : 0));",
+                  "pm.test(\"responds within 5 s once warm\", () => pm.expect(pm.response.responseTime).to.be.below(5000));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Predict: batch of three profiles",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/predict/batch",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "predict",
+                "batch"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"records\": [\n    {\n      \"application_id\": \"APP-1\",\n      \"tipo_credito\": \"9\",\n      \"capital_prestado\": 4200000,\n      \"plazo_meses\": 24,\n      \"edad_cliente\": 23,\n      \"tipo_laboral\": \"Independiente\",\n      \"salario_cliente\": 1200000,\n      \"total_otros_prestamos\": 3500000,\n      \"cuota_pactada\": 390000,\n      \"puntaje_datacredito\": 680,\n      \"cant_creditosvigentes\": 7,\n      \"huella_consulta\": 11,\n      \"tendencia_ingresos\": \"Decreciente\"\n    },\n    {\n      \"application_id\": \"APP-2\",\n      \"tipo_credito\": \"4\",\n      \"capital_prestado\": 3000000,\n      \"plazo_meses\": 12,\n      \"edad_cliente\": 35,\n      \"tipo_laboral\": \"Empleado\",\n      \"salario_cliente\": 3500000,\n      \"total_otros_prestamos\": 1000000,\n      \"cuota_pactada\": 300000,\n      \"puntaje_datacredito\": 750,\n      \"cant_creditosvigentes\": 2,\n      \"huella_consulta\": 3,\n      \"tendencia_ingresos\": \"Estable\"\n    },\n    {\n      \"application_id\": \"APP-3\",\n      \"tipo_credito\": \"10\",\n      \"capital_prestado\": 8000000,\n      \"plazo_meses\": 36,\n      \"edad_cliente\": 41,\n      \"tipo_laboral\": \"Independiente\",\n      \"salario_cliente\": 2500000,\n      \"total_otros_prestamos\": 2000000,\n      \"cuota_pactada\": 420000,\n      \"puntaje_datacredito\": 640,\n      \"cant_creditosvigentes\": 4,\n      \"huella_consulta\": 6,\n      \"tendencia_ingresos\": \"Creciente\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"three predictions in the same order\", () => pm.expect(b.predictions.map(p => p.application_id)).to.eql([\"APP-1\",\"APP-2\",\"APP-3\"]));",
+                  "pm.test(\"every probability is valid\", () => b.predictions.forEach(p => pm.expect(p.probability_default).to.be.within(0,1)));",
+                  "pm.test(\"flagged equals the number of review_flag true\", () => pm.expect(b.flagged).to.eql(b.predictions.filter(p => p.review_flag).length));",
+                  "pm.test(\"the risky profile scores higher than the safe one\", () => pm.expect(b.predictions[0].probability_default).to.be.above(b.predictions[1].probability_default));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Predict: custom decision_threshold (what-if)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/predict/batch",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "predict",
+                "batch"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"records\": [\n    {\n      \"application_id\": \"APP-1\",\n      \"tipo_credito\": \"9\",\n      \"capital_prestado\": 4200000,\n      \"plazo_meses\": 24,\n      \"edad_cliente\": 23,\n      \"tipo_laboral\": \"Independiente\",\n      \"salario_cliente\": 1200000,\n      \"total_otros_prestamos\": 3500000,\n      \"cuota_pactada\": 390000,\n      \"puntaje_datacredito\": 680,\n      \"cant_creditosvigentes\": 7,\n      \"huella_consulta\": 11,\n      \"tendencia_ingresos\": \"Decreciente\"\n    },\n    {\n      \"application_id\": \"APP-2\",\n      \"tipo_credito\": \"4\",\n      \"capital_prestado\": 3000000,\n      \"plazo_meses\": 12,\n      \"edad_cliente\": 35,\n      \"tipo_laboral\": \"Empleado\",\n      \"salario_cliente\": 3500000,\n      \"total_otros_prestamos\": 1000000,\n      \"cuota_pactada\": 300000,\n      \"puntaje_datacredito\": 750,\n      \"cant_creditosvigentes\": 2,\n      \"huella_consulta\": 3,\n      \"tendencia_ingresos\": \"Estable\"\n    }\n  ],\n  \"decision_threshold\": 0.5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "decision_threshold never changes review_flag; it only adds the what-if field."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"the authoritative flag still uses the frozen threshold\", () => b.predictions.forEach(p => pm.expect(p.review_flag).to.eql(p.probability_default >= b.threshold)));",
+                  "pm.test(\"the what-if flag uses 0.5\", () => b.predictions.forEach(p => pm.expect(p.review_flag_at_custom_threshold).to.eql(p.probability_default >= 0.5)));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Validation",
+      "item": [
+        {
+          "name": "Reject: unknown field (422)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/predict/batch",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "predict",
+                "batch"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"records\": [\n    {\n      \"application_id\": \"APP-1\",\n      \"tipo_credito\": \"9\",\n      \"capital_prestado\": 4200000,\n      \"plazo_meses\": 24,\n      \"edad_cliente\": 23,\n      \"tipo_laboral\": \"Independiente\",\n      \"salario_cliente\": 1200000,\n      \"total_otros_prestamos\": 3500000,\n      \"cuota_pactada\": 390000,\n      \"puntaje_datacredito\": 680,\n      \"cant_creditosvigentes\": 7,\n      \"huella_consulta\": 11,\n      \"tendencia_ingresos\": \"Decreciente\",\n      \"color\": \"blue\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"unknown fields are rejected with 422\", () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject: invalid tipo_laboral (422)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/predict/batch",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "predict",
+                "batch"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"records\": [\n    {\n      \"application_id\": \"APP-1\",\n      \"tipo_credito\": \"9\",\n      \"capital_prestado\": 4200000,\n      \"plazo_meses\": 24,\n      \"edad_cliente\": 23,\n      \"tipo_laboral\": \"Pirata\",\n      \"salario_cliente\": 1200000,\n      \"total_otros_prestamos\": 3500000,\n      \"cuota_pactada\": 390000,\n      \"puntaje_datacredito\": 680,\n      \"cant_creditosvigentes\": 7,\n      \"huella_consulta\": 11,\n      \"tendencia_ingresos\": \"Decreciente\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"a value outside the allowed list is rejected with 422\", () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject: age out of range (422)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/predict/batch",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "predict",
+                "batch"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"records\": [\n    {\n      \"application_id\": \"APP-1\",\n      \"tipo_credito\": \"9\",\n      \"capital_prestado\": 4200000,\n      \"plazo_meses\": 24,\n      \"edad_cliente\": 12,\n      \"tipo_laboral\": \"Independiente\",\n      \"salario_cliente\": 1200000,\n      \"total_otros_prestamos\": 3500000,\n      \"cuota_pactada\": 390000,\n      \"puntaje_datacredito\": 680,\n      \"cant_creditosvigentes\": 7,\n      \"huella_consulta\": 11,\n      \"tendencia_ingresos\": \"Decreciente\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"age 12 is rejected with 422\", () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject: empty records (422)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/predict/batch",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "predict",
+                "batch"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"records\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"an empty batch is rejected with 422\", () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Security and monitoring",
+      "item": [
+        {
+          "name": "Security: no token is refused",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Proves the service is private. This request sends no Authorization header."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"the private service refuses a call without a token (401 or 403)\", () => pm.expect(pm.response.code).to.be.oneOf([401,403]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Monitoring: drift check",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/monitoring/run-drift-check",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "monitoring",
+                "run-drift-check"
+              ]
+            },
+            "description": "Runs Evidently inside the API on the rows logged in BigQuery. It can take 10 to 40 s."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 (a result) or 409 (not enough logged rows yet)\", () => pm.expect(pm.response.code).to.be.oneOf([200,409]));",
+                  "if (pm.response.code === 200) { const b = pm.response.json();",
+                  "  pm.test(\"has the drift summary\", () => { pm.expect(b.dataset_drift_detected).to.be.a(\"boolean\"); pm.expect(b.drift_share).to.be.within(0,1); pm.expect(b.current_rows).to.be.above(29); }); }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
