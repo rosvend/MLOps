@@ -1,0 +1,14 @@
+# SageMaker custom training: where it runs. Candidates and params come from config/gcp_pipeline/default.yaml.
+region: us-east-1
+profile: default  # your AWS CLI profile
+bucket_prefix: mlops-loan-train
+dataset_key: datasets/loans_split.csv
+runs_prefix: runs
+instance_type: ml.m5.large
+instance_count: 1
+volume_gb: 5
+max_runtime_seconds: 1800
+candidates: [logistic, xgboost, lightgbm]
+tags: {project: mlops-loan-cdp}
+# On-demand list price, USD per instance-hour (us-east-1), source filled in docs/aws-training.md.
+price_per_hour: {ml.m5.large: 0.115}

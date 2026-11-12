@@ -260,3 +260,9 @@ site/
 infra-aws/.terraform/
 infra-aws/*.tfstate*
 infra-aws/*.tfvars
+
+# OpenTofu training stack (infra-aws/training)
+infra-aws/training/.terraform/
+infra-aws/training/*.tfstate*
+infra-aws/training/*.tfvars
+infra-aws/training/tfplan*

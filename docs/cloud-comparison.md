@@ -26,7 +26,7 @@ flowchart LR
         g7["Workload Identity Federation"]
     end
     subgraph aws["AWS"]
-        a1["S3 (built)"] --> a2["SageMaker Pipelines + Autopilot"]
+        a1["S3 (built)"] --> a2["SageMaker training jobs<br/>+ Autopilot (stopped)"]
         a2 --> a3["SageMaker Model Registry"]
         a4["ECR (built)"] --> a5["Lambda container + Function URL (built)"]
         a5 --> a6["SQLite in /tmp (built, ephemeral)"]
@@ -49,8 +49,8 @@ flowchart LR
 | CI login without keys | Workload Identity Federation with an `attribute_condition`; a wrong claim name failed only at first login [hands-on GCP]; workflows ran on GitHub [hands-on GCP] | IAM OIDC provider (one per account) and a role with `aud` and `sub` conditions; policy-simulated, never assumed from GitHub; workflow only linted [hands-on AWS] |
 | Access control | Least-privilege service accounts per workflow; private service needs an ID token [hands-on GCP] | Private Function URL gives a bare 403; SigV4 signing is heavier than an ID token; the test used an administrator role in a shared account, so safety was self-imposed [hands-on AWS] |
 | Cost of serving | Scales to zero; cost not measured [hands-on GCP] | Under $0.05 for the whole test, calculated; idle cost is ECR and S3 storage only [hands-on AWS] |
-| Cost of training (custom) | Under $0.25 for all attempts, about $0.03 per pipeline run, estimates [hands-on GCP]; steps wait for a VM each | SageMaker run in progress when this page was written; result to be added [not verified] |
-| AutoML (time and cost) | 1 node-hour minimum, about $21 (rate $21.252 per node-hour); 2 h 15 min; refused rows with empty numeric cells [hands-on GCP] | SageMaker run in progress when this page was written; result to be added [not verified] |
+| Training (custom) | Vertex Pipelines: 3 models in about 6 min, under $0.25 for all attempts, about $0.03 per run (estimates); each step waits for a VM [hands-on GCP] | SageMaker: 3 parallel jobs on `ml.m5.large`, 93 s each, 70 s of it start-up and download, fit 0.2 to 1.7 s; about $0.005 computed ($0.115/h, 54 billable s per job). Same PR-AUC as GCP (0.129, 0.091, 0.102) [hands-on AWS] |
+| AutoML | Vertex AutoML: 1 node-hour minimum, about $21; 2 h 15 min; refused rows with empty numeric cells [hands-on GCP] | Autopilot: started and stopped after 2 min by us. It launched 10 parallel `ml.r5.16xlarge` jobs ($4.838/h each; worst case about $20 for a 1,500 s cap), about $1.50 spent. Optimises AUC or F1 (no PR-AUC) and takes no predefined split. Not scored on TEST [hands-on AWS] |
 | Model registry and experiments | Versions and movable aliases (`challenger`, `champion`); Vertex Experiments [hands-on GCP] | Model groups, versions, approval status; managed MLflow [researched AWS] |
 | Monitoring and drift | Evidently in our API reading a BigQuery log, called daily by a workflow [hands-on GCP] | Not built; log was ephemeral SQLite [hands-on AWS]. Model Monitor is closed to new customers; AWS suggests Evidently, MLflow and CloudWatch [researched AWS] |
 | Portability and lock-in | Tied: Vertex pipeline and registry code, `google_*` resources, BigQuery log [hands-on GCP] | FastAPI app, Docker image and the `PredictionsStore` switch ran unchanged on Lambda (one env var, a new Dockerfile) [hands-on AWS]; BigQuery log and drift check did not carry over [hands-on AWS] |

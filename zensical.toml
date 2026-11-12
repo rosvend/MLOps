@@ -27,6 +27,7 @@ nav = [
   { "AWS versus GCP" = [
     { "Comparison" = "cloud-comparison.md" },
     { "AWS deployment" = "aws-pipeline.md" },
+    { "AWS training" = "aws-training.md" },
   ] },
   { "Analysis" = [
     { "Why the signal is weak" = "investigation/model-signal.md" },

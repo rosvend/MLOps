@@ -50,7 +50,7 @@ About nine concepts were needed, with IAM and SigV4 heaviest. Total wall clock f
 
 ## What was not done
 
-- SageMaker training and Autopilot are not part of this serving test (see the comparison page for any later results).
+- SageMaker training and Autopilot are not part of this serving test; they were run separately, see [AWS training](aws-training.md).
 - CodeDeploy and a CloudWatch alarm: the workflow rolls back only on a failed smoke test.
 - Running the workflow on GitHub, so OIDC from Actions is untested.
 - Drift monitoring and a durable prediction log; ECS Express Mode; fixing the cold start.
