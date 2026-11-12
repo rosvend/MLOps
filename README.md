@@ -37,8 +37,6 @@ Full detail per stage in `docs/`: [architecture](docs/architecture.md) ·
 [monitoring](docs/monitoring.md).
 
 
----
-
 ## Pipeline
 
 The entire pipeline runs on Google Cloud training on Vertex AI (a custom pipeline and AutoML), models in the Vertex Model Registry, the API on Cloud Run with a BigQuery prediction
@@ -55,7 +53,6 @@ flowchart LR
 
 Everything is explained, with diagrams, on the **[documentation site](https://rosvend.github.io/MLOps/)**.
 
----
 
 ## 🚀 Quick Start 
 
