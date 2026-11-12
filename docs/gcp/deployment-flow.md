@@ -1,160 +1,120 @@
-# Model lifecycle: retraining, promotion and canary deployment
+# Model lifecycle and CI/CD
 
-This page follows one model from "someone pushes code" to "customers get scores from it", and explains who or what
-decides each step. The editable diagram is [`deployment-flow.drawio`](deployment-flow.drawio)
-([open it in draw.io](https://app.diagrams.net/?url=https%3A%2F%2Fraw.githubusercontent.com%2Frosvend%2FMLOps%2Fmain%2Fdocs%2Fgcp%2Fdeployment-flow.drawio)).
+This page follows one model from "someone pushes code" to "customers get scores from it" and says what decides each step. The editable diagram is [`deployment-flow.drawio`](deployment-flow.drawio) ([open it in draw.io](https://app.diagrams.net/?url=https%3A%2F%2Fraw.githubusercontent.com%2Frosvend%2FMLOps%2Fmain%2Fdocs%2Fgcp%2Fdeployment-flow.drawio)).
 
 ```mermaid
 flowchart LR
     t["Triggers<br/>weekly, code push,<br/>drift, manual"] --> train["Train on Vertex AI<br/>3 candidates"]
-    train --> gate{"Gate:<br/>better than the<br/>champion?"}
-    gate -->|"no: keep"| keep["Champion stays"]
+    train --> gate{"Gate: better<br/>than champion?"}
+    gate -->|"no"| keep["Champion stays"]
     gate -->|"yes"| appr["Human approval<br/>(GitHub environment)"]
     appr --> promo["Promote: champion files,<br/>registry alias"]
     promo --> dep["Deploy workflow"]
-    code["Code push to main<br/>(API, features, config)"] --> dep
-    dep --> canary["Canary: 0 % then 10 % then 100 %<br/>smoke tests, rollback"]
+    code["Code push to main"] --> dep
+    dep --> canary["Canary: 10 % then 100 %<br/>smoke tests, rollback"]
     canary --> live["Cloud Run serves it"]
     live --> logs["BigQuery log"]
-    logs --> drift["Daily drift check<br/>(Evidently)"]
+    logs --> drift["Daily drift check"]
     drift -->|"drift"| t
 ```
 
-## How often is the model retrained?
+## 1. From trigger to promotion
 
-Retraining is started by one of four triggers (`.github/workflows/train.yaml`). Only one training runs at a time.
+Four GitHub Actions workflows do the work. They sign in with Workload Identity Federation, so no key is stored (see [overview](overview.md)).
 
-| Trigger | When |
+| Workflow file | Trigger | What it does |
+| --- | --- | --- |
+| `ci.yaml` | Pull request, push to `main`, or called by deploy | Installs dependencies, checks folder structure, checks the champion's PR-AUC and Gini floors (`config/ci/metric_thresholds.yaml`), runs pytest, then `notify` posts a job summary and a commit comment (the email). Cloud steps are skipped for forks |
+| `train.yaml` | Mondays 06:00 UTC; push touching training code, features, training config or the training image; drift; by hand (with a reason and optional `force_promote`) | Builds the training image tagged with the commit SHA, runs the Vertex pipeline as `vertex-pipeline`, runs the gate, waits for approval, promotes and starts deploy. One run at a time |
+| `deploy.yaml` | Push to `main` touching serving code or config; by hand; called after a promotion | Runs CI, builds the image tagged with the commit, deploys a canary, rolls back on failure. One deploy at a time. A docs-only change deploys nothing |
+| `drift-check.yaml` | Daily 07:00 UTC; on demand | Calls the API's drift endpoint with an ID token and starts a Train run if drift is found |
+
+A code push deploys automatically after tests and smoke tests. A new model never ships because of a code push: it needs the gate and an approval.
+
+The gate (`python -m src.gcp.gate`) scores the same rows with the candidate and the champion. It promotes only if every rule holds, and "keep" is a normal answer. All numbers are in `config/gcp_gate/default.yaml`.
+
+| Check | Rule |
 | --- | --- |
-| Schedule | Every Monday at 06:00 UTC |
-| Code or config change | A push to `main` that touches training code, features, training config or the training image (`src/gcp`, `src/models`, `src/features`, `config/training`, `config/features`, `config/gcp_pipeline`, `docker/Dockerfile.train`) |
-| Drift | The daily drift check (07:00 UTC) finds drift and starts a run |
-| By hand | *Run workflow* in GitHub Actions, with a reason and an optional `force_promote` |
+| Improvement | PR-AUC at least 0.005 higher |
+| Not noise | The 95 % paired-bootstrap interval of the PR-AUC difference (1,000 redraws, fixed seed) has its lower end above 0 |
+| Same contract | Same feature list, a threshold present, no missing scores |
+| Sane flagging | The share flagged at the frozen threshold is between 0.5 and 2.0 times the share at fit |
 
-**An honest caveat.** The training data is one fixed CSV in Cloud Storage; nothing feeds new loans into it. So a scheduled
-retraining today reproduces the same model, and the gate answers "keep". The mechanism is real and has been run, but a
-useful weekly retraining needs a process that appends newly matured loans to the data. That does not exist yet.
+If the gate says promote, the `promote` job pauses at the `production` GitHub environment until the reviewer approves. Self-review is allowed because one person works on the project. After approval the candidate's `champion.joblib`, `champion.meta.json` and `reference_data.parquet` overwrite `gs://mlops-roysandoval-data/models/champion/` (bucket versioning keeps the old files), a new version is registered and the `champion` alias moves to it ([training](training.md)), and the deploy workflow starts.
 
-## From candidate to production
+What has run for real:
 
-1. **Train.** The workflow builds the training image on the runner, submits the Vertex AI pipeline (running as the
-   dedicated `vertex-pipeline` account) and waits. The pipeline trains logistic regression, XGBoost and LightGBM in
-   parallel on the training months and picks the best by PR-AUC. Each candidate's model, metadata and drift reference are
-   written under `gs://mlops-roysandoval-data/pipeline-runs/<run>/models/<name>/`.
-2. **Gate.** The candidate and the current champion score the same loans, and the gate promotes only if all of this holds:
+| Piece | Status |
+| --- | --- |
+| `train.yaml` end to end (2026-11-11) | Ran in about 10 minutes. The gate answered `keep` (PR-AUC 0.1293 for both models). The first push-triggered run failed on a quota project the federated identity cannot bill, and was fixed |
+| Approval and promotion (`force_promote` run) | Ran. The job paused until approved (the approval comment records that the assistant approved it at the reviewer's explicit request), copied the files, registered version 2 and moved the alias |
+| Redeploy after that promotion | Completed once the GitHub incident cleared. The first retry failed on a cold-start timeout and rolled back; the second passed and served the promoted champion |
+| `drift-check.yaml` | Ran. Drift was detected (the test traffic was one repeated loan) and a Train run started |
+| A real `promote` decision | Never seen. Every candidate equals the champion, so the interval is [0, 0] |
 
-    | Check | Rule |
-    | --- | --- |
-    | Improvement | PR-AUC at least 0.005 higher |
-    | Not noise | The 95 % paired-bootstrap interval of the PR-AUC difference has its lower end above 0 |
-    | Same contract | Same feature list, a threshold present, no missing scores |
-    | Sane flagging | The share flagged at the frozen threshold is between 0.5 and 2.0 times the share at fit |
+## 2. Canary deployment
 
-    The evaluation rows are the TEST months, which have been used before for model selection, so the comparison favours
-    whichever model was chosen on them. Replace `evaluation_uri` with newer labelled loans once they exist.
-3. **Approval.** If the gate says promote, the `promote` job pauses at the `production` GitHub environment until the
-   reviewer approves. A human decides; the gate only proposes.
-4. **Promote.** After approval the candidate's files overwrite `gs://mlops-roysandoval-data/models/champion/` (the bucket
-   keeps old versions, so the previous champion can be restored), a new version is registered in the Vertex AI Model
-   Registry, the `champion` alias moves to it, and the Deploy workflow is started.
-
-## How the canary deployment works
-
-The Deploy workflow (`deploy.yaml`) runs when the API code changes or after a promotion. The "model replacement" is nothing
-special: the new champion file is baked into a new container image, and the rollout is the same as for code.
+A new model is not special: the champion file is baked into a new container image and rolled out like code. The service is private, so the workflow sends a short-lived ID token proving it is `github-ci`.
 
 ```mermaid
 sequenceDiagram
     participant GH as Deploy workflow
     participant CR as Cloud Run
-    GH->>GH: tests, download champion, build image tagged with the commit
+    GH->>GH: tests, build image tagged with commit
     GH->>CR: new revision, 0 % traffic, tag "candidate"
-    GH->>CR: smoke test the tagged URL (health + one prediction)
+    GH->>CR: smoke test: /health and one prediction
     GH->>CR: 10 % candidate, 90 % previous
-    loop soak time, about 2.5 minutes
-        GH->>CR: probe requests to the candidate and to the previous revision
+    loop soak, about 2.5 minutes
+        GH->>CR: 40 probes to each revision
     end
-    GH->>GH: read Cloud Monitoring: requests, 5xx share and p95 latency of both
-    GH->>CR: 100 % candidate, only if the metrics pass
+    GH->>GH: read Cloud Monitoring: requests, 5xx, p95
+    GH->>CR: 100 % candidate, only if metrics pass
     alt any step fails
-        GH->>CR: 100 % back to the previous revision
+        GH->>CR: 100 % back to previous revision
     end
 ```
 
-Cloud Run keeps every revision, so a rollback is moving the traffic percentage and takes seconds. It has been used for real:
-on 2026-11-11 a smoke test timed out on a cold revision, the workflow restored the previous revision on its own and
-failed the run.
+Cloud Run keeps every revision, so a rollback moves a traffic percentage and takes seconds. The analysis (`src/ci/canary.py`, limits in `config/ci/canary.yaml`) waits two minutes for Cloud Monitoring, then rolls back if the candidate has fewer than 20 requests in the metrics, more than 2 % server errors, a p95 above 6 s or above twice the previous revision's, or if any probe fails. A smoke test that timed out on a cold revision also rolled back on its own on 2026-11-11.
 
-**What the canary checks.** At 10 % the workflow sends 40 probe requests to each revision over 2.5 minutes, waits two minutes
-for Cloud Monitoring to catch up, and reads each revision's request count, 5xx share and 95th percentile latency. The
-candidate is rolled back if it has fewer than 20 requests in the metrics, more than 2 % server errors, a p95 above 6 s or
-above twice the previous revision's p95, or if any probe fails. The limits are in `config/ci/canary.yaml`.
+The three canary runs of 2026-11-12:
 
-**What the three real runs showed** (2026-11-12). The first run failed: a tagging command of ours removed the `candidate` tag, the probes
-could not reach the new revision, and the analysis rolled back with "only 4 requests in the metrics". After the fix, a normal run
-passed: the candidate had 45 requests, 0 % server errors and a p95 of 153 ms, against 41 requests and 308 ms for the previous
-revision, and took 100 % of the traffic. A third run with the latency cap forced to 1 ms failed on purpose ("p95 203 ms is above
-the cap of 1 ms") and traffic went back to the previous revision. The `canary_p95_limit_ms` input of the Deploy workflow is how
-to repeat that test.
+| Run | Result |
+| --- | --- |
+| First | Failed. A tagging command of ours removed the `candidate` tag, the probes could not reach the revision, and the analysis rolled back with "only 4 requests in the metrics" |
+| Normal pass, after the fix | Candidate: 45 requests, 0 % 5xx, p95 153 ms. Previous: 41 requests, p95 308 ms. The candidate took 100 % |
+| Forced failure | The `canary_p95_limit_ms` input set to 1 ms failed on purpose ("p95 203 ms is above the cap of 1 ms") and traffic went back to the previous revision |
 
-**What it still is not.** Most of the traffic it judges is probe traffic, because real traffic is thin. It looks at errors
-and speed, not at the quality of the predictions, and the whole check lasts about five minutes. A canary on a busy service
-would hold longer and could also compare the score distribution of the two revisions.
+## 3. Prediction log and monitoring
 
-Code changes and model changes use different gates: a code push deploys automatically after tests and smoke tests, with no
-human approval; a new model needs the gate and an approval.
+Every `/predict/batch` call records what it scored in BigQuery, table `mlops-roysandoval.mlops_monitoring.predictions` (columns `scored_at` TIMESTAMP and `payload` JSON). Locally it stays SQLite. Cloud Run sets `PREDICTIONS_LOG_TYPE=bigquery`, which overrides `config/monitoring/default.yaml` without a code change.
 
-## Monitoring: where Evidently runs and why not Vertex Model Monitoring
+| Option | Verdict |
+| --- | --- |
+| SQLite on Cloud Run | Fails: the container user cannot create `/app/data`, and the disk is ephemeral and private to each instance |
+| Cloud SQL | Works, but is a server billed by the hour with networking and a password, for an append-only log |
+| BigQuery | Serverless, shared by all instances, no secret needed (the runtime account is enough) |
 
-**Where.** Evidently runs *inside the API container on Cloud Run*, at `POST /monitoring/run-drift-check`. It compares the
-requests logged in BigQuery with the training reference (`reference_data.parquet`, baked into the image) and returns a
-JSON summary: whether the dataset drifted, which features, and the share flagged. A GitHub workflow calls that endpoint
-once a day with an ID token. With fewer than 30 logged requests it answers 409, and the workflow treats that as "nothing
-to do". `make monitor` runs the same code offline.
+`infra/monitoring.tf` grants the runtime account `bigquery.dataEditor` on that dataset only and `bigquery.jobUser` on the project. Cost is an estimate: a few thousand small rows per month sits far inside the free tier. The load test found a real bug here: an application that omitted an optional field was logged with a `NaN`, BigQuery's JSON type rejected the insert and the API returned a 500 ([API testing](api-testing.md)). The fix writes `null` and a logging failure can no longer fail a prediction.
 
-**Why Evidently and not Vertex Model Monitoring.** The honest answer is that Evidently came first and was never swapped out:
-it was already working, runs identically on a laptop and in the cloud, and reads our own BigQuery log. Vertex Model
-Monitoring is built around models deployed to Vertex endpoints, with BigQuery as a data source. Its documentation
-describes monitoring on a schedule with default thresholds of 0.3 and a sampling rate. I could not confirm from the
-documentation whether it supports a model served on Cloud Run, and I never tried it, so this was a choice made without
-testing the alternative. It would be a fair experiment for a later iteration.
+Evidently runs inside the API container at `POST /monitoring/run-drift-check`. It compares logged requests with the training reference baked into the image. With fewer than 30 logged requests it answers 409, which the workflow treats as nothing to do.
 
-**A gap found while writing this.** On Cloud Run the drift check returns its result correctly, but the HTML dashboard it
-tries to save afterwards fails (the container cannot write to disk), so no dashboard is kept. Saving it to Cloud Storage
-would fix that.
+Why not Vertex Model Monitoring? Evidently came first and was never swapped out. Vertex Model Monitoring is built around models on Vertex endpoints. I could not confirm from the documentation whether it supports a model served on Cloud Run, and I never tried it, so this choice was made without testing the alternative. One gap remains: on Cloud Run the HTML dashboard cannot be saved (the container cannot write to disk), so none is kept. Saving it to Cloud Storage would fix that.
 
-## How this differs from the AWS SageMaker reference design
+## 4. AWS comparison and limits
 
-| | AWS reference | This project |
+| | AWS SageMaker reference | This project |
 | --- | --- | --- |
-| Source and CI | GitHub, connected through CodeStar | GitHub Actions only |
-| Pipeline | SageMaker Pipeline: preprocess, train, evaluate, register | Vertex AI Pipeline: load, train 3 candidates, compare, export. The promotion gate is a separate GitHub job |
-| Model approval | A lead data scientist approves in the registry; EventBridge and Lambda then trigger the deploy | A reviewer approves in a GitHub environment; the promote job moves the registry alias and starts the deploy |
-| Environments | A staging endpoint, tests, a manual approval, then production | No staging environment: a canary revision of the same service, smoke-tested, then 10 % and 100 % |
-| Deploy approval | A person approves the production deploy | Code deploys are automatic; only model promotion needs a person |
-| Hosting | SageMaker endpoints | Cloud Run |
-| Deploy tooling | CloudFormation | `gcloud run deploy` for the service, OpenTofu for the infrastructure |
-| Secrets | Secrets Manager holds a GitHub token | None: Workload Identity Federation lets GitHub sign in without keys |
-| Events | EventBridge and Lambda connect the steps | Workflows call each other (`gh workflow run`) |
+| Source and CI | GitHub through CodeStar | GitHub Actions only |
+| Pipeline | SageMaker Pipeline: preprocess, train, evaluate, register | Vertex AI Pipeline: load, train 3 candidates, compare, export. The gate is a separate GitHub job |
+| Model approval | Lead data scientist approves in the registry; EventBridge and Lambda trigger the deploy | Reviewer approves in a GitHub environment; the promote job moves the alias and starts deploy |
+| Environments | Staging endpoint, tests, manual approval, production | No staging: a canary revision of the same service, then 10 % and 100 % |
+| Hosting and deploy tool | SageMaker endpoints, CloudFormation | Cloud Run, `gcloud run deploy`, OpenTofu |
+| Secrets and events | Secrets Manager holds a GitHub token; EventBridge and Lambda connect steps | No stored secrets; workflows call each other with `gh workflow run` |
 
-## Testing the live API
+The AWS side of this comparison is built in [AWS pipeline](../aws-pipeline.md); see the [cloud comparison](../cloud-comparison.md).
 
-- **Postman** (`tests/postman/scoring_api_cloud.postman_collection.json`): 10 requests and 26 assertions covering basic
-  predictions, input validation (422 for bad input), the refusal of calls without a token, and the drift check. It passes
-  against the live service. See `tests/postman/README.md` for the token and for running it with Newman.
-- **Locust** (`loadtest/locustfile.py`): simulated users sending varied applications. 20 users for 60 seconds gave about 8
-  requests per second, a median of 700 ms, p95 of 1.6 s and p99 of 2.8 s, with Cloud Run scaling out to both allowed
-  instances. Sequential calls take about 300 ms, so under load the latency more than doubles.
+Limits to keep in mind:
 
-What the tests found, which is the reason to run them:
-
-1. **Cold start.** The first call after idle took 34 seconds. The service scales to zero. Keeping one instance warm would
-   remove it at a standing cost.
-2. **A production bug.** The first load test returned errors on 28 % of requests. An application that left out an optional
-   field was logged with a `NaN`, BigQuery's JSON type rejected the whole insert, and the API turned that into a 500. The
-   fix writes `null` instead, and a failure to log can no longer fail a prediction. The second run had no errors in 480
-   requests. The fix reached production through the Deploy workflow.
-3. **Logging adds latency.** Each prediction writes to BigQuery inside the request. I did not measure how much of the
-   load-test latency that explains.
-4. **Test traffic pollutes the log.** Synthetic requests are logged like real ones, so the next drift check sees them
-   and reports drift.
+* The training data is one static CSV and nothing appends new loans, so weekly retraining reproduces the same model and the gate says "keep". A useful schedule needs a process that adds newly matured loans.
+* The gate scores the TEST months, which were already used to choose between models. The comparison favours the model chosen on them, so a `promote` is weaker evidence than it looks. Point `evaluation_uri` at newer labelled loans when they exist.
+* The canary judges mostly probe traffic, because real traffic is thin. It checks errors and speed, not prediction quality, and lasts about five minutes.
