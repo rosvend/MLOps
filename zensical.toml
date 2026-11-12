@@ -26,6 +26,7 @@ nav = [
     { "Phase 2 results" = "gcp/results.md" },
     { "Model Registry" = "gcp/model-registry.md" },
     { "Prediction log" = "gcp/prediction-log.md" },
+    { "Model lifecycle" = "gcp/deployment-flow.md" },
     { "CI/CD" = "gcp/cicd.md" },
     { "Training workflow" = "gcp/training-workflow.md" },
     { "Design decisions" = "gcp/decisions.md" },
