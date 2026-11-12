@@ -159,6 +159,6 @@ lowers the latency cap, so a manual run with the value 1 forces a failure and sh
 | CI: tests, folder-structure check, metric check | Built |
 | Notification (job summary and commit comment) | Built |
 | Workload Identity Federation and the CI identity's permissions | Built |
-| CD: image build, canary deploy, smoke tests | Built and run on GitHub: all steps passed, 100 % of traffic moved to the new revision. The rollback step has not been triggered (it was correctly skipped) |
+| CD: image build, canary deploy, canary analysis | Built and run on GitHub many times. The rollback has fired for real three times: a smoke test that timed out on a cold revision, the first canary analysis (a tagging bug of ours made the candidate unreachable) and a deliberate failure with a 1 ms latency cap. A normal run passes and moves 100 % of traffic |
 | Training workflow, promotion gate and approval | Built and run; the approval pause was reached, see [Training workflow](training-workflow.md) |
 | Scheduled drift check | Built and run; drift detected and a Train run started |

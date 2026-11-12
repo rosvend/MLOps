@@ -1,0 +1,86 @@
+name: Deploy to AWS (comparison)
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: aws-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  FUNCTION: mlops-loan-scoring
+  REPOSITORY: mlops-loan-api
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Download the champion model
+        run: aws s3 cp "s3://${{ vars.AWS_MODELS_BUCKET }}/champion/" models/ --recursive --only-show-errors
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push the image
+        id: image
+        run: |
+          image="${{ steps.ecr.outputs.registry }}/${REPOSITORY}:${GITHUB_SHA}"
+          docker build --provenance=false -f docker/Dockerfile.lambda -t "$image" .
+          docker push "$image"
+          echo "uri=$image" >> "$GITHUB_OUTPUT"
+
+      - name: Remember the version that serves traffic now
+        id: previous
+        run: echo "version=$(aws lambda get-alias --function-name "$FUNCTION" --name live --query FunctionVersion --output text)" >> "$GITHUB_OUTPUT"
+
+      - name: Publish the new version and point the candidate alias at it
+        id: candidate
+        run: |
+          version=$(aws lambda update-function-code --function-name "$FUNCTION" --image-uri "${{ steps.image.outputs.uri }}" --publish --query Version --output text)
+          aws lambda wait function-updated-v2 --function-name "$FUNCTION" --qualifier "$version"
+          aws lambda update-alias --function-name "$FUNCTION" --name candidate --function-version "$version" > /dev/null
+          url() { aws lambda get-function-url-config --function-name "$FUNCTION" --qualifier "$1" --query FunctionUrl --output text; }
+          {
+            echo "version=$version"
+            echo "candidate_url=$(url candidate)"
+            echo "live_url=$(url live)"
+          } >> "$GITHUB_OUTPUT"
+          echo "- previous version: \`${{ steps.previous.outputs.version }}\`, new version: \`$version\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke-test the candidate
+        run: scripts/aws_smoke_test.sh "${{ steps.candidate.outputs.candidate_url }}"
+
+      - name: Send 10 percent of traffic to the new version
+        run: |
+          aws lambda update-alias --function-name "$FUNCTION" --name live \
+            --function-version "${{ steps.previous.outputs.version }}" \
+            --routing-config '{"AdditionalVersionWeights":{"${{ steps.candidate.outputs.version }}":0.1}}' > /dev/null
+          scripts/aws_smoke_test.sh "${{ steps.candidate.outputs.live_url }}"
+
+      - name: Send 100 percent of traffic to the new version
+        run: |
+          aws lambda update-alias --function-name "$FUNCTION" --name live \
+            --function-version "${{ steps.candidate.outputs.version }}" \
+            --routing-config '{"AdditionalVersionWeights":{}}' > /dev/null
+          scripts/aws_smoke_test.sh "${{ steps.candidate.outputs.live_url }}"
+          echo "- traffic: 100% on version \`${{ steps.candidate.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Roll back to the previous version
+        if: failure() && steps.previous.outputs.version != ''
+        run: |
+          aws lambda update-alias --function-name "$FUNCTION" --name live \
+            --function-version "${{ steps.previous.outputs.version }}" \
+            --routing-config '{"AdditionalVersionWeights":{}}' > /dev/null
+          echo "- rolled back: 100% on version \`${{ steps.previous.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"

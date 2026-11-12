@@ -255,3 +255,8 @@ infra/*.tfstate*
 infra/terraform.tfvars
 # Built documentation site
 site/
+
+# OpenTofu (AWS comparison)
+infra-aws/.terraform/
+infra-aws/*.tfstate*
+infra-aws/*.tfvars

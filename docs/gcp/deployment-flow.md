@@ -90,6 +90,13 @@ for Cloud Monitoring to catch up, and reads each revision's request count, 5xx s
 candidate is rolled back if it has fewer than 20 requests in the metrics, more than 2 % server errors, a p95 above 6 s or
 above twice the previous revision's p95, or if any probe fails. The limits are in `config/ci/canary.yaml`.
 
+**What the three real runs showed** (2026-11-12). The first run failed: a tagging command of ours removed the `candidate` tag, the probes
+could not reach the new revision, and the analysis rolled back with "only 4 requests in the metrics". After the fix, a normal run
+passed: the candidate had 45 requests, 0 % server errors and a p95 of 153 ms, against 41 requests and 308 ms for the previous
+revision, and took 100 % of the traffic. A third run with the latency cap forced to 1 ms failed on purpose ("p95 203 ms is above
+the cap of 1 ms") and traffic went back to the previous revision. The `canary_p95_limit_ms` input of the Deploy workflow is how
+to repeat that test.
+
 **What it still is not.** Most of the traffic it judges is probe traffic, because real traffic is thin. It looks at errors
 and speed, not at the quality of the predictions, and the whole check lasts about five minutes. A canary on a busy service
 would hold longer and could also compare the score distribution of the two revisions.

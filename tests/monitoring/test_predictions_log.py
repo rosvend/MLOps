@@ -71,3 +71,15 @@ def test_the_db_file_is_created_under_the_configured_path(tmp_path):
     log.append([{"application_id": "APP-1", "probability_default": 0.5, "review_flag": False}])
 
     assert destino.exists()
+
+
+def test_env_var_overrides_sqlite_path(monkeypatch):
+    from src.monitoring.spec import default_monitoring_spec
+
+    monkeypatch.setenv("PREDICTIONS_DB_PATH", "/tmp/predictions.db")
+    default_monitoring_spec.cache_clear()
+    try:
+        assert default_monitoring_spec().predictions_log.sqlite_path == "/tmp/predictions.db"
+    finally:
+        monkeypatch.delenv("PREDICTIONS_DB_PATH")
+        default_monitoring_spec.cache_clear()

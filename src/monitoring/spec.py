@@ -71,4 +71,6 @@ def default_monitoring_spec() -> MonitoringSpec:
     datos = yaml.safe_load(SPEC_PATH.read_text(encoding="utf-8"))
     if tipo := os.environ.get("PREDICTIONS_LOG_TYPE"):
         datos["predictions_log"]["type"] = tipo
+    if ruta := os.environ.get("PREDICTIONS_DB_PATH"):
+        datos["predictions_log"]["sqlite_path"] = ruta
     return MonitoringSpec(**datos)

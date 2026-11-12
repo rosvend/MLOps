@@ -3,7 +3,7 @@
 reference_path: models/reference_data.parquet
 
 # Where scored requests are logged. type: sqlite (local default) or bigquery (Cloud Run).
-# The env var PREDICTIONS_LOG_TYPE overrides type, so the image needs no YAML edit.
+# The env vars PREDICTIONS_LOG_TYPE and PREDICTIONS_DB_PATH override type and sqlite_path, so the image needs no YAML edit.
 predictions_log:
   type: sqlite
   sqlite_path: data/monitoring/predictions.db

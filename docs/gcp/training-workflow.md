@@ -153,4 +153,3 @@ gate and the human still decide whether a new model is better.
 | `drift-check.yaml` end to end | **Ran.** It called the private API with an ID token, the runtime account read the BigQuery log, drift was detected (the test traffic was one repeated loan) and it started a Train run. Its first run failed on the last step (`gh` did not know the repository, fixed with `GH_REPO`) |
 | A `promote` decision from the gate on real data | Never seen: every candidate so far equals the champion, so the interval of the difference is [0, 0]; `force_promote` exercises the same path by hand |
 
-To test the whole loop once after merging, see the steps in the pull request description.

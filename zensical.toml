@@ -32,6 +32,7 @@ nav = [
     { "Design decisions" = "gcp/decisions.md" },
   ] },
   { "Cloud comparison" = "cloud-comparison.md" },
+  { "AWS deployment (hands-on)" = "aws-pipeline.md" },
   { "Analysis" = [
     { "Why the signal is weak" = "investigation/model-signal.md" },
   ] },
