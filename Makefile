@@ -1,4 +1,4 @@
-.PHONY: publish-champion fetch-champion check-metrics install test eda features feast-apply feast-verify score train export-champion export-reference export-gcp-dataset build-train-image gcp-pipeline docs-build docs-serve monitor serve tunnel register-model phase2-report
+.PHONY: publish-champion fetch-champion check-metrics install test eda features feast-apply feast-verify score train export-champion export-reference export-gcp-dataset build-train-image gcp-pipeline docs-build docs-serve monitor serve tunnel register-model phase2-report pdf
 
 # Application Default Credentials may carry another project's quota project; bill this one.
 export GOOGLE_CLOUD_QUOTA_PROJECT ?= mlops-roysandoval
@@ -74,3 +74,6 @@ register-model:
 
 phase2-report:
 	uv run python -m src.reports.phase2
+
+pdf:
+	python3 entrega/build.py
