@@ -124,11 +124,12 @@ jobs:
           scripts/smoke_test.sh "${{ steps.candidate.outputs.candidate_url }}"
           scripts/smoke_test.sh "${{ steps.candidate.outputs.service_url }}"
 
+      # --update-tags adds the tag; --set-tags would replace all tags and remove `candidate`.
       - name: Tag the previous revision so it can be probed too
         id: previous_tag
         run: |
           gcloud run services update-traffic "$SERVICE" --region "${{ vars.GCP_REGION }}" \
-            --set-tags "previous=${{ steps.previous.outputs.revision }}" --quiet
+            --update-tags "previous=${{ steps.previous.outputs.revision }}" --quiet
           desc=$(gcloud run services describe "$SERVICE" --region "${{ vars.GCP_REGION }}" --format=json)
           echo "url=$(jq -r '.status.traffic[] | select(.tag == "previous") | .url' <<< "$desc")" >> "$GITHUB_OUTPUT"
 
