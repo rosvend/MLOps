@@ -28,7 +28,7 @@ Reproducible experiments · Automated CI/CD · Containerized serving · Live dri
 ## Architecture
 
 <p align="center">
-  <img src="docs/plots/pipeline_diagram.png" alt="Pipeline: raw loan data flows through prep/validation, feature engineering and an offline Feast feature store, into Optuna/MLflow training that exports the best model, which is served behind a FastAPI batch API and watched by Evidently-based drift monitoring that signals back into training." width="100%">
+  <img src="docs/plots/gcp-mlops-architecture.png" alt="Pipeline: raw loan data flows through prep/validation, feature engineering and an offline Feast feature store, into Optuna/MLflow training that exports the best model, which is served behind a FastAPI batch API and watched by Evidently-based drift monitoring that signals back into training." width="100%">
 </p>
 
 Full detail per stage in `docs/`: [architecture](docs/architecture.md) ·
@@ -39,10 +39,9 @@ Full detail per stage in `docs/`: [architecture](docs/architecture.md) ·
 
 ---
 
-## Google Cloud
+## Pipeline
 
-The same pipeline runs on Google Cloud (project `mlops-roysandoval`): training on Vertex AI (a custom
-pipeline and AutoML), models in the Vertex Model Registry, the API on Cloud Run with a BigQuery prediction
+The entire pipeline runs on Google Cloud training on Vertex AI (a custom pipeline and AutoML), models in the Vertex Model Registry, the API on Cloud Run with a BigQuery prediction
 log, and GitHub Actions for CI, canary deploys, retraining behind a promotion gate and a human approval.
 
 ```mermaid
@@ -54,8 +53,7 @@ flowchart LR
     gate --> deploy
 ```
 
-Everything is explained, with diagrams, on the **[documentation site](https://rosvend.github.io/MLOps/)**. Start with
-*Target architecture*, *Phase 2 results*, *CI/CD* and *Cloud comparison*.
+Everything is explained, with diagrams, on the **[documentation site](https://rosvend.github.io/MLOps/)**.
 
 ---
 
@@ -101,9 +99,6 @@ curl -X POST localhost:8000/predict/batch -H 'Content-Type: application/json' -d
     "total_otros_prestamos":3500000,"cuota_pactada":390000,"puntaje_datacredito":680,
     "cant_creditosvigentes":7,"huella_consulta":11,"tendencia_ingresos":"Decreciente"}]}'
 ```
-#### API Reference
-
-> **Coming soon**: Interactive docs auto-generated at [http://localhost:8000/docs](http://localhost:8000/docs).
 
 ## Results
 
